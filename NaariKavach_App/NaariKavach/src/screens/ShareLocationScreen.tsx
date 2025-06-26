@@ -172,7 +172,7 @@ export default function ShareLocationScreen({ navigation }: Props): React.JSX.El
       const { latitude, longitude } = location.coords;
       
       // Create location message
-      const locationMessage = `🚨 Emergency Alert from NaariKavach 🚨\n\nI'm sharing my current location with you for safety purposes.\n\nLocation: https://maps.google.com/maps?q=${latitude},${longitude}\n\nCoordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}\n\nPlease check on me if you don't hear from me soon.\n\n- Sent via NaariKavach Safety App`;
+      const locationMessage = `Emergency Alert from NaariKavach \n\nI'm sharing my current location with you for safety purposes, I hope that you can monitor my journey!.\n\nLocation: https://maps.google.com/maps?q=${latitude},${longitude}\n\nCoordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}\n\nPlease check on me if you don't hear from me soon.\n\n- Sent via NaariKavach. Your Safety, Our Priority~`;
       
       // Create WhatsApp URL
       const whatsappUrl = `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(locationMessage)}`;
