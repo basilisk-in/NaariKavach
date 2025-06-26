@@ -20,8 +20,8 @@ export default function PoliceLoginScreen({ navigation }: Props): React.JSX.Elem
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-    // Navigate to police dashboard
-    navigation.navigate('PoliceTabs');
+    // Navigate to police dashboard with unitId
+    navigation.navigate('PoliceTabs', { unitId });
   };
 
   return (

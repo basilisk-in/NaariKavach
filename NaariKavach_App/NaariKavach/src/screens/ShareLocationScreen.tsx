@@ -262,10 +262,12 @@ export default function ShareLocationScreen({ navigation }: Props): React.JSX.El
                   'Unable to share location via WhatsApp. Please make sure WhatsApp is installed and the contacts have valid phone numbers.'
                 );
               }
+              
+              // Reset page to default state
+              setSelectedContacts([]);
+              setSearchQuery('');
+              setCurrentLocation(null);
             }, 500);
-            
-            // Clear selected contacts after sharing
-            setSelectedContacts([]);
           }
         }
       ]
@@ -292,6 +294,11 @@ export default function ShareLocationScreen({ navigation }: Props): React.JSX.El
               value={searchQuery}
               onChangeText={setSearchQuery}
             />
+            {searchQuery.length > 0 && (
+              <TouchableOpacity onPress={() => setSearchQuery('')}>
+                <Ionicons name="close" size={20} color={colors.gray} />
+              </TouchableOpacity>
+            )}
           </View>
         </View>
 

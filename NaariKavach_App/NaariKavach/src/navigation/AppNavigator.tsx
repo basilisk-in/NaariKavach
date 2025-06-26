@@ -21,6 +21,11 @@ import AlertDetailsScreen from '../screens/AlertDetailsScreen';
 import PoliceAlertsScreen from '../screens/PoliceAlertsScreen';
 import EmergencyContactsScreen from '../screens/EmergencyContactsScreen';
 import AddEmergencyContactScreen from '../screens/AddEmergencyContactScreen';
+import PersonalInformationScreen from '../screens/PersonalInformationScreen';
+import SafetySettingsScreen from '../screens/SafetySettingsScreen';
+import NotificationsScreen from '../screens/NotificationsScreen';
+import PrivacySecurityScreen from '../screens/PrivacySecurityScreen';
+import HelpSupportScreen from '../screens/HelpSupportScreen';
 
 // Navigation types
 export type RootStackParamList = {
@@ -30,10 +35,15 @@ export type RootStackParamList = {
   PoliceLogin: undefined;
   SignUp: undefined;
   UserTabs: undefined;
-  PoliceTabs: undefined;
+  PoliceTabs: { unitId: string };
   AlertDetails: { alert?: any };
   EmergencyContacts: undefined;
   AddEmergencyContact: undefined;
+  PersonalInformation: undefined;
+  SafetySettings: undefined;
+  Notifications: undefined;
+  PrivacySecurity: undefined;
+  HelpSupport: undefined;
 };
 
 export type UserTabParamList = {
@@ -43,9 +53,9 @@ export type UserTabParamList = {
 };
 
 export type PoliceTabParamList = {
-  Dashboard: undefined;
-  Alerts: undefined;
-  Map: undefined;
+  Dashboard: { unitId: string };
+  Alerts: { unitId: string };
+  Map: { unitId: string };
 };
 
 const Stack = createStackNavigator<RootStackParamList>();
@@ -95,7 +105,9 @@ function UserTabNavigator(): React.JSX.Element {
 }
 
 // Police Tab Navigator
-function PoliceTabNavigator(): React.JSX.Element {
+function PoliceTabNavigator({ route }: { route: { params: { unitId: string } } }): React.JSX.Element {
+  const { unitId } = route.params;
+  
   return (
     <PoliceTab.Navigator
       screenOptions={({ route }) => ({
@@ -119,8 +131,16 @@ function PoliceTabNavigator(): React.JSX.Element {
         headerShown: false,
       })}
     >
-      <PoliceTab.Screen name="Dashboard" component={PoliceDashboardScreen} />
-      <PoliceTab.Screen name="Alerts" component={PoliceAlertsScreen} />
+      <PoliceTab.Screen 
+        name="Dashboard" 
+        component={PoliceDashboardScreen}
+        initialParams={{ unitId }}
+      />
+      <PoliceTab.Screen 
+        name="Alerts" 
+        component={PoliceAlertsScreen}
+        initialParams={{ unitId }}
+      />
     </PoliceTab.Navigator>
   );
 }
@@ -164,6 +184,11 @@ export default function AppNavigator(): React.JSX.Element {
             <Stack.Screen name="AlertDetails" component={AlertDetailsScreen} />
             <Stack.Screen name="EmergencyContacts" component={EmergencyContactsScreen} />
             <Stack.Screen name="AddEmergencyContact" component={AddEmergencyContactScreen} />
+            <Stack.Screen name="PersonalInformation" component={PersonalInformationScreen} />
+            <Stack.Screen name="SafetySettings" component={SafetySettingsScreen} />
+            <Stack.Screen name="Notifications" component={NotificationsScreen} />
+            <Stack.Screen name="PrivacySecurity" component={PrivacySecurityScreen} />
+            <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
           </>
         )}
         {/* Police screens - these can be accessed from either auth state for now */}

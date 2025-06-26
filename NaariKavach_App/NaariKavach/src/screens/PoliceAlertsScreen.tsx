@@ -23,6 +23,8 @@ interface Props {
 }
 
 export default function PoliceAlertsScreen({ navigation, route }: Props): React.JSX.Element {
+  const { unitId } = route.params || { unitId: 'Unknown' };
+  
   // Mock alert data for demonstration
   const alerts: AlertData[] = [
     {
@@ -61,11 +63,11 @@ export default function PoliceAlertsScreen({ navigation, route }: Props): React.
   };
 
   const handleAcknowledge = (alertId: string): void => {
-    Alert.alert('Success', `Alert ${alertId} acknowledged`);
+    Alert.alert('Success', `Unit ${unitId}: Alert ${alertId} acknowledged`);
   };
 
   const handleDispatch = (alertId: string): void => {
-    Alert.alert('Success', `Unit dispatched for alert ${alertId}`);
+    Alert.alert('Success', `Unit ${unitId} dispatched for alert ${alertId}`);
   };
 
   const getStatusColor = (status: string): string => {
@@ -101,7 +103,10 @@ export default function PoliceAlertsScreen({ navigation, route }: Props): React.
             <TouchableOpacity onPress={() => navigation.goBack()}>
                 <Ionicons name="arrow-back" size={24} color={colors.darkGray} />
             </TouchableOpacity>
-          <Text style={styles.headerTitle}>Active Alerts</Text>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Active Alerts</Text>
+            <Text style={styles.unitIdText}>Unit: {unitId}</Text>
+          </View>
           <TouchableOpacity style={styles.refreshButton}>
             <Ionicons name="refresh" size={24} color={colors.darkGray} />
           </TouchableOpacity>
@@ -156,6 +161,15 @@ const styles = StyleSheet.create({
     fontSize: 18,
     fontWeight: '700',
     color: colors.darkGray,
+  },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+  },
+  unitIdText: {
+    fontSize: 12,
+    color: colors.gray,
+    marginTop: 2,
   },
   refreshButton: {
     padding: spacing.sm,

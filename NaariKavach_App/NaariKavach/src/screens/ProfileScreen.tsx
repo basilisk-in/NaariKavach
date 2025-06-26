@@ -75,7 +75,10 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
 
           {/* Profile Options */}
           <View style={styles.optionsContainer}>
-            <TouchableOpacity style={styles.optionItem}>
+            <TouchableOpacity 
+              style={styles.optionItem}
+              onPress={() => navigation.navigate('PersonalInformation')}
+            >
               <View style={styles.optionIcon}>
                 <Ionicons name="person-outline" size={24} color={colors.darkGray} />
               </View>
@@ -94,7 +97,10 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
               <Ionicons name="chevron-forward" size={20} color={colors.gray} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.optionItem}>
+            <TouchableOpacity 
+              style={styles.optionItem}
+              onPress={() => navigation.navigate('SafetySettings')}
+            >
               <View style={styles.optionIcon}>
                 <Ionicons name="shield-outline" size={24} color={colors.darkGray} />
               </View>
@@ -102,7 +108,10 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
               <Ionicons name="chevron-forward" size={20} color={colors.gray} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.optionItem}>
+            <TouchableOpacity 
+              style={styles.optionItem}
+              onPress={() => navigation.navigate('Notifications')}
+            >
               <View style={styles.optionIcon}>
                 <Ionicons name="notifications-outline" size={24} color={colors.darkGray} />
               </View>
@@ -110,7 +119,10 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
               <Ionicons name="chevron-forward" size={20} color={colors.gray} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.optionItem}>
+            <TouchableOpacity 
+              style={styles.optionItem}
+              onPress={() => navigation.navigate('PrivacySecurity')}
+            >
               <View style={styles.optionIcon}>
                 <Ionicons name="lock-closed-outline" size={24} color={colors.darkGray} />
               </View>
@@ -118,7 +130,10 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
               <Ionicons name="chevron-forward" size={20} color={colors.gray} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.optionItem}>
+            <TouchableOpacity 
+              style={styles.optionItem}
+              onPress={() => navigation.navigate('HelpSupport')}
+            >
               <View style={styles.optionIcon}>
                 <Ionicons name="help-circle-outline" size={24} color={colors.darkGray} />
               </View>
