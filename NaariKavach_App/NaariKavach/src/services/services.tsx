@@ -5,6 +5,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage';
 const API_BASE_URL = 'http://192.168.137.1:8000';  // Update this with your actual API base URL
 const AUTH_TOKEN_KEY = 'auth_token';
 const USER_DATA_KEY = 'user_data';
+const EMERGENCY_CONTACTS_KEY = 'emergency_contacts';
 
 // Types for API responses and requests
 export interface ApiResponse<T> {
@@ -19,6 +20,15 @@ export interface UserData {
   id: number;
   username: string;
   email: string;
+}
+
+export interface EmergencyContact {
+  id: string;
+  name: string;
+  phoneNumber: string;
+  email?: string;
+  avatar?: string;
+  addedAt: string;
 }
 
 export interface AuthTokenResponse {
@@ -624,6 +634,82 @@ export const tokenManager = {
       return false;
     }
   }
+};
+
+// Emergency contacts manager
+export const emergencyContactsManager = {
+  // Save emergency contacts to AsyncStorage
+  saveEmergencyContacts: async (contacts: EmergencyContact[]): Promise<void> => {
+    try {
+      await AsyncStorage.setItem(EMERGENCY_CONTACTS_KEY, JSON.stringify(contacts));
+    } catch (error) {
+      console.error('Error saving emergency contacts:', error);
+      throw error;
+    }
+  },
+
+  // Get emergency contacts from AsyncStorage
+  getEmergencyContacts: async (): Promise<EmergencyContact[]> => {
+    try {
+      const contactsJson = await AsyncStorage.getItem(EMERGENCY_CONTACTS_KEY);
+      return contactsJson ? JSON.parse(contactsJson) : [];
+    } catch (error) {
+      console.error('Error getting emergency contacts:', error);
+      return [];
+    }
+  },
+
+  // Add emergency contact
+  addEmergencyContact: async (contact: Omit<EmergencyContact, 'id' | 'addedAt'>): Promise<EmergencyContact[]> => {
+    try {
+      const existingContacts = await emergencyContactsManager.getEmergencyContacts();
+      
+      // Check if contact already exists
+      const isDuplicate = existingContacts.some(
+        existing => existing.phoneNumber === contact.phoneNumber
+      );
+      
+      if (isDuplicate) {
+        throw new Error('This contact is already in your emergency contacts list');
+      }
+
+      const newContact: EmergencyContact = {
+        ...contact,
+        id: Date.now().toString(),
+        addedAt: new Date().toISOString(),
+      };
+
+      const updatedContacts = [...existingContacts, newContact];
+      await emergencyContactsManager.saveEmergencyContacts(updatedContacts);
+      return updatedContacts;
+    } catch (error) {
+      console.error('Error adding emergency contact:', error);
+      throw error;
+    }
+  },
+
+  // Remove emergency contact
+  removeEmergencyContact: async (contactId: string): Promise<EmergencyContact[]> => {
+    try {
+      const existingContacts = await emergencyContactsManager.getEmergencyContacts();
+      const updatedContacts = existingContacts.filter(contact => contact.id !== contactId);
+      await emergencyContactsManager.saveEmergencyContacts(updatedContacts);
+      return updatedContacts;
+    } catch (error) {
+      console.error('Error removing emergency contact:', error);
+      throw error;
+    }
+  },
+
+  // Clear all emergency contacts
+  clearEmergencyContacts: async (): Promise<void> => {
+    try {
+      await AsyncStorage.removeItem(EMERGENCY_CONTACTS_KEY);
+    } catch (error) {
+      console.error('Error clearing emergency contacts:', error);
+      throw error;
+    }
+  },
 };
 
 // Create a WebSocketManager instance for export

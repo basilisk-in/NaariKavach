@@ -2,11 +2,16 @@ import React, { useEffect, useState } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { UserTabParamList } from '../navigation/AppNavigator';
+import { CompositeNavigationProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { UserTabParamList, RootStackParamList } from '../navigation/AppNavigator';
 import { commonStyles, colors, spacing, borderRadius } from '../styles/commonStyles';
 import { useAuth } from '../contexts/AuthContext';
 
-type ProfileScreenNavigationProp = BottomTabNavigationProp<UserTabParamList, 'Profile'>;
+type ProfileScreenNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<UserTabParamList, 'Profile'>,
+  StackNavigationProp<RootStackParamList>
+>;
 
 interface Props {
   navigation: ProfileScreenNavigationProp;
@@ -78,7 +83,10 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
               <Ionicons name="chevron-forward" size={20} color={colors.gray} />
             </TouchableOpacity>
 
-            <TouchableOpacity style={styles.optionItem}>
+            <TouchableOpacity 
+              style={styles.optionItem}
+              onPress={() => navigation.navigate('EmergencyContacts')}
+            >
               <View style={styles.optionIcon}>
                 <Ionicons name="people-outline" size={24} color={colors.darkGray} />
               </View>

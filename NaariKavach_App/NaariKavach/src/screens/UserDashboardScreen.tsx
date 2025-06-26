@@ -1,13 +1,18 @@
 import React, { useState, useEffect } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { UserTabParamList } from '../navigation/AppNavigator';
+import { CompositeNavigationProp } from '@react-navigation/native';
+import { StackNavigationProp } from '@react-navigation/stack';
+import { UserTabParamList, RootStackParamList } from '../navigation/AppNavigator';
 import { commonStyles, colors, spacing, borderRadius } from '../styles/commonStyles';
-import api from '../services/services';
+import api, { EmergencyContact, emergencyContactsManager } from '../services/services';
 import * as Location from 'expo-location';
 
-type UserDashboardScreenNavigationProp = BottomTabNavigationProp<UserTabParamList, 'Home'>;
+type UserDashboardScreenNavigationProp = CompositeNavigationProp<
+  BottomTabNavigationProp<UserTabParamList, 'Home'>,
+  StackNavigationProp<RootStackParamList>
+>;
 
 interface Props {
   navigation: UserDashboardScreenNavigationProp;
@@ -83,6 +88,169 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
       Alert.alert(
         'Emergency Alert', 
         'Some error occured.'
+      );
+    }
+  };
+
+  const formatPhoneNumber = (phoneNumber: string): string => {
+    // Remove all non-numeric characters
+    let cleaned = phoneNumber.replace(/\D/g, '');
+    
+    // If number starts with country code, use as is
+    // If it's a local number, add country code (assuming Indian numbers)
+    if (cleaned.length === 10) {
+      // Assuming Indian numbers, add +91
+      cleaned = '91' + cleaned;
+    } else if (cleaned.startsWith('0')) {
+      // Remove leading 0 and add country code
+      cleaned = '91' + cleaned.substring(1);
+    }
+    
+    return cleaned;
+  };
+
+  const shareLocationViaWhatsApp = async (contact: EmergencyContact, location: Location.LocationObject): Promise<boolean> => {
+    try {
+      const phoneNumber = formatPhoneNumber(contact.phoneNumber);
+      const { latitude, longitude } = location.coords;
+      
+      // Create emergency location message with live location
+      const emergencyMessage = `Emergency Alert from NaariKavach \n\nI'm sharing my current location with you for safety purposes, I hope that you can monitor my journey!.\n\nLocation: https://maps.google.com/maps?q=${latitude},${longitude}\n\nCoordinates: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}\n\nPlease check on me if you don't hear from me soon.\n\n- Sent via NaariKavach. Your Safety, Our Priority~`;
+      
+      // Create WhatsApp URL
+      const whatsappUrl = `whatsapp://send?phone=${phoneNumber}&text=${encodeURIComponent(emergencyMessage)}`;
+      
+      // Check if WhatsApp can be opened
+      const canOpen = await Linking.canOpenURL(whatsappUrl);
+      
+      if (canOpen) {
+        await Linking.openURL(whatsappUrl);
+        return true;
+      } else {
+        // Fallback to web WhatsApp
+        const webWhatsappUrl = `https://web.whatsapp.com/send?phone=${phoneNumber}&text=${encodeURIComponent(emergencyMessage)}`;
+        await Linking.openURL(webWhatsappUrl);
+        return true;
+      }
+      
+    } catch (error) {
+      console.error('Error sharing emergency alert via WhatsApp:', error);
+      return false;
+    }
+  };
+
+  const emergency = async (): Promise<void> => {
+    try {
+      // Get current location first
+      const currentLocation = location || await getCurrentLocation();
+      
+      if (!currentLocation) {
+        Alert.alert(
+          'Location Required',
+          'Unable to get your current location. Please enable location services and try again.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Get emergency contacts
+      const emergencyContacts = await emergencyContactsManager.getEmergencyContacts();
+      
+      if (emergencyContacts.length === 0) {
+        Alert.alert(
+          'No Emergency Contacts',
+          'You haven\'t set up any emergency contacts yet. Would you like to add some now?',
+          [
+            { text: 'Later', style: 'cancel' },
+            { 
+              text: 'Add Contacts', 
+              onPress: () => navigation.navigate('EmergencyContacts')
+            }
+          ]
+        );
+        return;
+      }
+
+      // Confirm emergency alert
+      Alert.alert(
+        '🚨 Emergency Alert',
+        `Send emergency location alert to ${emergencyContacts.length} emergency contact${emergencyContacts.length > 1 ? 's' : ''}?\n\nThis will share your live location for the next 1 hour.`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Send Emergency Alert',
+            style: 'destructive',
+            onPress: async () => {
+              try {
+                // Show sending progress
+                Alert.alert(
+                  'Sending Emergency Alert',
+                  'Please wait while we notify your emergency contacts...',
+                  [],
+                  { cancelable: false }
+                );
+
+                let successCount = 0;
+                let failureCount = 0;
+                
+                // Send WhatsApp messages to all emergency contacts
+                for (const contact of emergencyContacts) {
+                  const success = await shareLocationViaWhatsApp(contact, currentLocation);
+                  if (success) {
+                    successCount++;
+                  } else {
+                    failureCount++;
+                  }
+                  
+                  // Small delay between messages to avoid overwhelming WhatsApp
+                  await new Promise(resolve => setTimeout(resolve, 1500));
+                }
+
+                // Show result after a brief delay
+                setTimeout(() => {
+                  if (successCount === emergencyContacts.length) {
+                    Alert.alert(
+                      '✅ Emergency Alert Sent',
+                      `Your emergency location has been shared with all ${successCount} emergency contact${successCount > 1 ? 's' : ''} via WhatsApp.\n\nThey will be able to monitor your location for the next hour.`,
+                      [{ text: 'OK' }]
+                    );
+                  } else if (successCount > 0) {
+                    Alert.alert(
+                      '⚠️ Partially Sent',
+                      `Emergency alert sent to ${successCount} contact${successCount > 1 ? 's' : ''}. ${failureCount} contact${failureCount > 1 ? 's' : ''} could not be reached.\n\nPlease ensure WhatsApp is installed and contacts have valid phone numbers.`,
+                      [{ text: 'OK' }]
+                    );
+                  } else {
+                    Alert.alert(
+                      '❌ Failed to Send',
+                      'Unable to send emergency alerts via WhatsApp. Please make sure WhatsApp is installed and try again.',
+                      [{ text: 'OK' }]
+                    );
+                  }
+                }, 1000);
+
+                // Set unsafe status
+                setIsSafe(false);
+
+              } catch (error) {
+                console.error('Error sending emergency alerts:', error);
+                Alert.alert(
+                  'Error',
+                  'Failed to send emergency alerts. Please try again.',
+                  [{ text: 'OK' }]
+                );
+              }
+            }
+          }
+        ]
+      );
+
+    } catch (error) {
+      console.error('Error in emergency function:', error);
+      Alert.alert(
+        'Error',
+        'An error occurred while preparing the emergency alert. Please try again.',
+        [{ text: 'OK' }]
       );
     }
   };
@@ -169,12 +337,12 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
 
           <TouchableOpacity 
             style={styles.statusCard}
-            onPress={() => navigation.navigate('Safety')}
+            onPress={() => emergency()}
           >
             <View style={styles.statusIcon}>
-              <Ionicons name="people" size={24} color={colors.darkGray} />
+              <Ionicons name="warning" size={24} color="#FF4444" />
             </View>
-            <Text style={styles.statusText}>Share Location with Family/Friends</Text>
+            <Text style={styles.statusText}>Send Emergency Alert to Contacts</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
