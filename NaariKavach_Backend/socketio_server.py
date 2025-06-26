@@ -200,12 +200,12 @@ def join_location_tracking_channel(sid, data):
 @sio.event
 def officer_location_update(sid, data):
     logger.info(f'Client {sid} joined location tracking channel')
-    sio.emit('unit_loc', data, room='location_tracking_channel')
+    sio.emit('unit_loc', data, room='officer_tracking_channel')
 
 @sio.event
 def join_officer_update(sid, data):
     """Join the location tracking channel to receive all unit location updates"""
-    sio.enter_room(sid, 'location_tracking_channel')
+    sio.enter_room(sid, 'officer_tracking_channel')
     logger.info(f'Client {sid} joined location tracking channel')
     sio.emit('room_joined', {'channel': 'location_tracking_channel', 'message': 'Joined location tracking channel'}, to=sid)
 
