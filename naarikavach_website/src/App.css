@@ -1,0 +1,100 @@
+/* Custom styles for the NaariKavach dashboard */
+@import "tailwindcss";
+
+* {
+  cursor: none !important;
+}
+:root {
+  --cursor-color: 48, 99%, 54%;
+}
+
+/* Override body flex centering for full width layouts
+body {
+  display: block !important;
+  place-items: unset !important;
+} */
+
+#root {
+  /* width: 100vw; */
+  min-width: 100vw;
+ /* max-width: none; */
+}
+
+.App {
+  /* width: 100vw !important; */
+  /* min-width: 100vw !important; */
+  /* max-width: none !important; */
+}
+
+/* Diagonal Text Styling */
+.diagonal-text-container {
+  transform: skewX(-12deg);
+  display: inline-block;
+  position: relative;
+  z-index: 2;
+}
+
+.diagonal-text-container span {
+  transform: skewX(12deg);
+  display: inline-block;
+}
+
+.diagonal-text-container-reverse {
+  transform: skewX(-12deg);
+  display: inline-block;
+  margin-left: -20px;
+  position: relative;
+  z-index: 1;
+}
+
+.diagonal-text-container-reverse span {
+  transform: skewX(12deg);
+  display: inline-block;
+}
+
+/* Add subtle shadow effects for depth */
+.diagonal-text-container {
+  box-shadow: 4px 4px 15px rgba(0, 0, 0, 0.3);
+}
+
+.diagonal-text-container-reverse {
+  box-shadow: -4px 4px 15px rgba(0, 0, 0, 0.2);
+}
+
+/* Responsive adjustments */
+@media (max-width: 768px) {
+  .diagonal-text-container,
+  .diagonal-text-container-reverse {
+    transform: none;
+    margin: 0;
+    display: block;
+    margin-bottom: 8px;
+  }
+  
+  .diagonal-text-container span,
+  .diagonal-text-container-reverse span {
+    transform: none;
+  }
+}
+
+/* html, body, #root {
+  height: 100%;
+  margin: 0;
+  padding: 0;
+}
+
+#root {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+}
+
+header {
+  flex: 0 0 auto;
+}
+
+#mycanvas {
+  flex: 1 1 auto;
+  width: 100%;
+  display: block;
+} */
