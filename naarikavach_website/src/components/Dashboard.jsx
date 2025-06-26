@@ -44,6 +44,13 @@ export function Dashboard() {
   // Refresh functionality
   const [isRefreshing, setIsRefreshing] = useState(false)
   
+  // Police unit tracking state
+  const [isTrackingUnits, setIsTrackingUnits] = useState(false)
+  const [policeUnits, setPoliceUnits] = useState([]) // Array of {unit_id, latitude, longitude, timestamp}
+  const [isSubscribedToOfficerChannel, setIsSubscribedToOfficerChannel] = useState(false)
+  const [mapSelectedUnit, setMapSelectedUnit] = useState(null) // For unit marker selection
+  const [showUnitInfoWindow, setShowUnitInfoWindow] = useState(false)
+  
   // Placeholder for API key - replace with your actual key
   const API_KEY = import.meta.env.VITE_GOOGLE_MAPS_API_KEY || 'YOUR_API_KEY_HERE'
   const MAP_ID = import.meta.env.VITE_MAP_ID || 'YOUR_MAP_ID_HERE'
@@ -197,6 +204,12 @@ export function Dashboard() {
       socketService.onNewSOS(handleNewSOS)
       socketService.onLocationHistory(handleLocationHistory)
       
+      // Register unit location listener if tracking is enabled
+      if (isTrackingUnits) {
+        console.log('🚔 Registering police unit location listener...')
+        socketService.onUnitLocation(handleUnitLocationUpdate)
+      }
+      
       // Debug: Check listener counts after registration
       setTimeout(() => {
         const socket = socketService.getSocket()
@@ -220,6 +233,19 @@ export function Dashboard() {
       }
     }
   }, []) // Empty dependency array - setup once on mount
+
+  // Separate useEffect for unit tracking lifecycle
+  useEffect(() => {
+    if (isTrackingUnits && socketService.getSocket()) {
+      console.log('🚔 Setting up police unit location listener...')
+      socketService.onUnitLocation(handleUnitLocationUpdate)
+      
+      return () => {
+        console.log('🧹 Cleaning up police unit location listener...')
+        socketService.removeUnitLocationListener()
+      }
+    }
+  }, [isTrackingUnits]) // Dependency on tracking state
 
   const getStatusColor = (sos) => {
     if (sos.status_flag === 1) return 'text-green-600' // Resolved
@@ -282,6 +308,8 @@ export function Dashboard() {
   const handleMapClick = useCallback(() => {
     setShowInfoWindow(false)
     setMapSelectedSOS(null)
+    setShowUnitInfoWindow(false)
+    setMapSelectedUnit(null)
   }, [])
 
   // Get filtered SOS requests based on active map tab
@@ -304,6 +332,75 @@ export function Dashboard() {
     setShowInfoWindow(false)
     setMapSelectedSOS(null)
   }
+
+  // Police unit tracking handlers
+  const handleToggleUnitTracking = async () => {
+    if (!isTrackingUnits) {
+      // Start tracking
+      console.log('🚔 Starting police unit tracking...')
+      setIsTrackingUnits(true)
+      socketService.joinOfficerTrackingChannel()
+      setIsSubscribedToOfficerChannel(true)
+      console.log('✅ Police unit tracking started')
+    } else {
+      // Stop tracking
+      console.log('🛑 Stopping police unit tracking...')
+      setIsTrackingUnits(false)
+      setPoliceUnits([]) // Clear existing units
+      setIsSubscribedToOfficerChannel(false)
+      socketService.removeUnitLocationListener()
+      setMapSelectedUnit(null)
+      setShowUnitInfoWindow(false)
+      console.log('✅ Police unit tracking stopped')
+    }
+  }
+
+  const handleUnitLocationUpdate = (data) => {
+    console.log('🚔 Police unit location update received:', data)
+    
+    // Validate data structure
+    if (!data.unit_id || !data.latitude || !data.longitude) {
+      console.warn('⚠️ Invalid unit location data:', data)
+      return
+    }
+    
+    setPoliceUnits(prevUnits => {
+      const existingUnitIndex = prevUnits.findIndex(unit => unit.unit_id === data.unit_id)
+      
+      if (existingUnitIndex >= 0) {
+        // Update existing unit
+        console.log(`🔄 Updating existing unit: ${data.unit_id}`)
+        const updatedUnits = [...prevUnits]
+        updatedUnits[existingUnitIndex] = {
+          unit_id: data.unit_id,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          timestamp: new Date().toISOString()
+        }
+        return updatedUnits
+      } else {
+        // Add new unit
+        console.log(`➕ Adding new unit: ${data.unit_id}`)
+        const newUnit = {
+          unit_id: data.unit_id,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          timestamp: new Date().toISOString()
+        }
+        return [...prevUnits, newUnit]
+      }
+    })
+  }
+
+  // Unit marker click handler
+  const handleUnitMarkerClick = useCallback((unit) => {
+    console.log('🚔 Unit marker clicked:', unit.unit_id)
+    setMapSelectedUnit(unit)
+    setShowUnitInfoWindow(true)
+    // Close SOS info window if open
+    setShowInfoWindow(false)
+    setMapSelectedSOS(null)
+  }, [])
 
   // Officer assignment input handler
   const handleAssignmentInputChange = (sosId, field, value) => {
@@ -566,6 +663,12 @@ export function Dashboard() {
                 <span className="font-medium">Subscribed Rooms: </span>
                 <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded">{subscribedRooms.length}</span>
               </div>
+              {isTrackingUnits && (
+                <div className="text-sm">
+                  <span className="font-medium">Police Units: </span>
+                  <span className="bg-green-100 text-green-800 px-2 py-1 rounded">{policeUnits.length}</span>
+                </div>
+              )}
               
               {/* User info and logout */}
               <div className="flex items-center gap-3">
@@ -632,6 +735,14 @@ export function Dashboard() {
                   {sosRequests.filter(s => s.status_flag === 1).length}
                 </div>
               </div>
+              {isTrackingUnits && (
+                <div className="bg-blue-50 p-3 rounded">
+                  <div className="text-sm text-blue-600 font-medium">Police Units</div>
+                  <div className="text-2xl font-bold text-blue-700">
+                    {policeUnits.length}
+                  </div>
+                </div>
+              )}
             </div>
 
             {/* Map Legend (only show in map view) */}
@@ -651,6 +762,12 @@ export function Dashboard() {
                     <div className="w-3 h-3 rounded-full bg-green-500"></div>
                     <span>Resolved</span>
                   </div>
+                  {isTrackingUnits && (
+                    <div className="flex items-center gap-2">
+                      <div className="w-3 h-3 rounded-full bg-blue-500"></div>
+                      <span>Police Units ({policeUnits.length})</span>
+                    </div>
+                  )}
                 </div>
               </div>
             )}
@@ -664,18 +781,54 @@ export function Dashboard() {
                   <div className="p-4 border-b border-gray-200">
                     <div className="flex items-center justify-between">
                       <h2 className="text-xl font-bold text-gray-900">Active SOS Requests</h2>
-                      <button 
-                        onClick={handleRefresh}
-                        disabled={isRefreshing}
-                        className={`flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
-                          isRefreshing
-                            ? 'bg-gray-400 text-white cursor-not-allowed'
-                            : 'bg-blue-600 text-white hover:bg-blue-700'
-                        }`}
-                      >
-                        <HiRefresh className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
-                        {isRefreshing ? 'Refreshing...' : 'Refresh'}
-                      </button>
+                      <div className="flex items-center gap-3">
+                        {/* Track All Units Button */}
+                        <button 
+                          onClick={handleToggleUnitTracking}
+                          className={`flex items-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors ${
+                            isTrackingUnits
+                              ? 'bg-red-600 text-white hover:bg-red-700'
+                              : 'bg-green-600 text-white hover:bg-green-700'
+                          }`}
+                        >
+                          {isTrackingUnits ? (
+                            <>
+                              <HiX className="w-4 h-4" />
+                              Stop Tracking Units
+                              <div className="w-2 h-2 bg-red-400 rounded-full animate-pulse ml-1"></div>
+                            </>
+                          ) : (
+                            <>
+                              <HiLocationMarker className="w-4 h-4" />
+                              Track All Units
+                            </>
+                          )}
+                        </button>
+                        
+                        {/* Unit count indicator */}
+                        {isTrackingUnits && (
+                          <div className="flex items-center gap-1 text-sm text-gray-600">
+                            <span className="font-medium">Units:</span>
+                            <span className="bg-blue-100 text-blue-800 px-2 py-1 rounded font-mono">
+                              {policeUnits.length}
+                            </span>
+                          </div>
+                        )}
+                        
+                        {/* Refresh Button */}
+                        <button 
+                          onClick={handleRefresh}
+                          disabled={isRefreshing}
+                          className={`flex items-center gap-2 px-3 py-2 rounded text-sm transition-colors ${
+                            isRefreshing
+                              ? 'bg-gray-400 text-white cursor-not-allowed'
+                              : 'bg-blue-600 text-white hover:bg-blue-700'
+                          }`}
+                        >
+                          <HiRefresh className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
+                          {isRefreshing ? 'Refreshing...' : 'Refresh'}
+                        </button>
+                      </div>
                     </div>
                   </div>
                   
@@ -1047,6 +1200,7 @@ export function Dashboard() {
                       onClick={handleMapClick}
                       style={{ width: '100%', height: '100%' }}
                     >
+                      {/* SOS Markers */}
                       {filteredSOSRequests.map((sos) => (
                         <AdvancedMarker
                           key={sos.id}
@@ -1059,6 +1213,23 @@ export function Dashboard() {
                             borderColor={'#ffffff'}
                             glyphColor={'#ffffff'}
                             scale={sos.sos_type === 0 ? 1.2 : 1.0} // Larger for emergencies
+                          />
+                        </AdvancedMarker>
+                      ))}
+
+                      {/* Police Unit Markers */}
+                      {isTrackingUnits && policeUnits.map((unit) => (
+                        <AdvancedMarker
+                          key={`unit-${unit.unit_id}`}
+                          position={{ lat: unit.latitude, lng: unit.longitude }}
+                          clickable={true}
+                          onClick={() => handleUnitMarkerClick(unit)}
+                        >
+                          <Pin
+                            background={'#3b82f6'} // Blue color for police units
+                            borderColor={'#ffffff'}
+                            glyphColor={'#ffffff'}
+                            scale={1.0}
                           />
                         </AdvancedMarker>
                       ))}
@@ -1099,6 +1270,32 @@ export function Dashboard() {
                             >
                               {subscribedRooms.includes(mapSelectedSOS.room_id) ? 'Subscribed ✓' : 'Subscribe to Room'}
                             </button> */}
+                          </div>
+                        </InfoWindow>
+                      )}
+
+                      {/* Police Unit Info Window */}
+                      {showUnitInfoWindow && mapSelectedUnit && (
+                        <InfoWindow
+                          position={{ 
+                            lat: mapSelectedUnit.latitude, 
+                            lng: mapSelectedUnit.longitude 
+                          }}
+                          onCloseClick={() => setShowUnitInfoWindow(false)}
+                        >
+                          <div className="p-1">
+                            <h3 className="font-semibold text-gray-900 mb-1">
+                              Police Unit #{mapSelectedUnit.unit_id}
+                            </h3>
+                            <p className="text-sm text-gray-700 mb-1">
+                              <strong>Status:</strong> On Patrol
+                            </p>
+                            <p className="text-sm text-gray-700 mb-1">
+                              <strong>Last Update:</strong> {new Date(mapSelectedUnit.timestamp).toLocaleTimeString()}
+                            </p>
+                            <p className="text-sm text-gray-700">
+                              <strong>Location:</strong> {mapSelectedUnit.latitude.toFixed(4)}, {mapSelectedUnit.longitude.toFixed(4)}
+                            </p>
                           </div>
                         </InfoWindow>
                       )}

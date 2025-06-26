@@ -82,6 +82,14 @@ class SocketService {
     }
   }
 
+  // Join officer tracking channel to receive police unit location updates
+  joinOfficerTrackingChannel() {
+    if (this.socket) {
+      this.socket.emit('join_officer_update', {})
+      console.log('🚔 Joining officer tracking channel')
+    }
+  }
+
   // Listen for new SOS alerts
   onNewSOS(callback) {
     if (this.socket) {
@@ -114,6 +122,22 @@ class SocketService {
     }
   }
 
+  // Listen for police unit location updates
+  onUnitLocation(callback) {
+    if (this.socket) {
+      // Remove existing listener if it exists to prevent duplicates
+      if (this.listeners.has('unit_loc')) {
+        const oldCallback = this.listeners.get('unit_loc')
+        this.socket.off('unit_loc', oldCallback)
+        console.log('🧹 Removed existing unit_loc listener')
+      }
+      
+      this.socket.on('unit_loc', callback)
+      this.listeners.set('unit_loc', callback)
+      console.log('🚔 Listening for police unit location updates')
+    }
+  }
+
   // Remove specific event listener
   removeListener(eventName) {
     if (this.socket && this.listeners.has(eventName)) {
@@ -133,6 +157,12 @@ class SocketService {
     })
     this.listeners.clear()
     console.log('🔇 Removed all listeners')
+  }
+
+  // Remove unit location listener specifically
+  removeUnitLocationListener() {
+    this.removeListener('unit_loc')
+    console.log('🚫 Removed police unit location listener')
   }
 
   // Get connection status

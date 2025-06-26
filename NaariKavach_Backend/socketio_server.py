@@ -199,7 +199,7 @@ def join_location_tracking_channel(sid, data):
 
 @sio.event
 def officer_location_update(sid, data):
-    logger.info(f'Client {sid} joined location tracking channel')
+    logger.info(f'Client {sid} {data}')
     sio.emit('unit_loc', data, room='officer_tracking_channel')
 
 @sio.event
