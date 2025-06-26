@@ -1,5 +1,6 @@
 {
   "dependencies": {
-    "expo-contacts": "~14.2.5"
+    "expo-contacts": "~14.2.5",
+    "react-native-toast-message": "^2.3.1"
   }
 }
