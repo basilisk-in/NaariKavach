@@ -3,7 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Act
 import { PanGestureHandler, State } from 'react-native-gesture-handler';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
-import { CompositeNavigationProp } from '@react-navigation/native';
+import { CompositeNavigationProp, CommonActions } from '@react-navigation/native';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RouteProp } from '@react-navigation/native';
 import { PoliceTabParamList, RootStackParamList } from '../navigation/AppNavigator';
@@ -55,7 +55,27 @@ export default function PoliceDashboardScreen({ navigation, route }: Props): Rea
   const lastDrawerHeight = useRef(minDrawerHeight);
   const panGestureRef = useRef(null);
 
-  const { logout } = useAuth(); // Assuming you have a logout function in your auth context
+  const { logout, isAuthenticated } = useAuth(); // Get isAuthenticated state
+  
+  // Monitor authentication state and redirect when logged out
+  useEffect(() => {
+    if (!isAuthenticated) {
+      console.log('🚪 Authentication lost, redirecting to splash...');
+      // Navigate to the splash screen - try multiple approaches
+      const rootNavigation = navigation.getParent();
+      if (rootNavigation) {
+        rootNavigation.dispatch(
+          CommonActions.reset({
+            index: 0,
+            routes: [{ name: 'Splash' }],
+          })
+        );
+      } else {
+        // Fallback: try direct navigation
+        (navigation as any).navigate('Splash');
+      }
+    }
+  }, [isAuthenticated, navigation]);
   
   // Dummy data for recent SOS history
   const [recentHistory] = useState([
@@ -227,29 +247,44 @@ export default function PoliceDashboardScreen({ navigation, route }: Props): Rea
 
     const emitUnitLocation = async () => {
       try {
-        if (socketRef.current?.connected && location) {
+        if (socketRef.current?.connected && location?.coords) {
           const unitLocationData = {
-            unitId: unitId,
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude
+            "unit_id": unitId,
+            "latitude": 28.569217,
+            "longitude": 77.166307,
+            "timestamp": new Date().toISOString(),
           };
           
-          socketRef.current.emit('unit_loc', unitLocationData);
+          socketRef.current.emit('officer_location_update', unitLocationData);
           console.log('📡 Emitted unit location:', unitLocationData);
+        } else {
+          console.log('⚠️ Cannot emit location:', {
+            socketConnected: socketRef.current?.connected,
+            hasLocation: !!location?.coords,
+            unitId
+          });
         }
       } catch (error) {
         console.error('❌ Error emitting unit location:', error);
       }
     };
 
-    // Start emitting location every 5 seconds when we have location and socket connection
-    if (location && socketRef.current?.connected) {
+    // Only start emitting if we have both location and socket connection
+    if (location?.coords && isSocketConnected && socketRef.current?.connected) {
+      console.log('🔄 Starting location emission for unit:', unitId);
+      
       // Emit immediately
       emitUnitLocation();
       
       // Set up interval to emit every 5 seconds
       locationInterval = setInterval(emitUnitLocation, 5000);
-      console.log('🔄 Started location emission interval');
+      console.log('✅ Location emission interval started');
+    } else {
+      console.log('⏸️ Location emission paused:', {
+        hasLocation: !!location?.coords,
+        isSocketConnected,
+        socketActuallyConnected: socketRef.current?.connected
+      });
     }
 
     // Cleanup interval on dependencies change or unmount
@@ -338,6 +373,12 @@ export default function PoliceDashboardScreen({ navigation, route }: Props): Rea
         }),
         timeoutPromise
       ]) as Location.LocationObject;
+      
+      console.log('🔄 Location refreshed:', {
+        latitude: currentLocation.coords.latitude,
+        longitude: currentLocation.coords.longitude,
+        unitId
+      });
       
       setLocation(currentLocation);
       // Note: Not redirecting map to current location on refresh - only update location state
@@ -514,10 +555,21 @@ export default function PoliceDashboardScreen({ navigation, route }: Props): Rea
                   style: 'destructive',
                   onPress: async () => {
                     try {
+                      // Clean up socket connection before logout
+                      if (socketRef.current) {
+                        console.log('🧹 Disconnecting socket before logout');
+                        socketRef.current.disconnect();
+                        socketRef.current = null;
+                      }
+                      
+                      // Use auth context logout - this will automatically trigger navigation
+                      console.log('🚪 Logging out...');
                       await logout();
-                      // Navigation is handled automatically by AuthContext
+                      console.log('✅ Logout successful');
                     } catch (error) {
-                      Alert.alert('Error', 'Failed to logout. Please try again.');
+                      console.error('Logout error:', error);
+                      // If logout fails, still try to clear state
+                      await logout();
                     }
                   },
                 },
