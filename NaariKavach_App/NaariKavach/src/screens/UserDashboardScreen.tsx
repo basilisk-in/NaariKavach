@@ -258,7 +258,7 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
         try {
           const response = await api.auth.getCurrentUser();
           if (response.success && response.data?.username) {
-            const res = await api.sos.createSOS(response.data?.username, 1, latitude, longitude);
+            const res = await api.sos.createSOS(response.data?.username, 0, latitude, longitude);
             console.log('SOS created:', res);
             if (res.success && res.data?.sos_id) {
               setSosId(res.data?.sos_id);

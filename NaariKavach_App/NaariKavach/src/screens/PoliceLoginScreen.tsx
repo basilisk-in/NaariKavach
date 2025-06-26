@@ -1,9 +1,10 @@
 import React, { useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Alert } from 'react-native';
+import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Alert, ActivityIndicator } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { commonStyles, colors, spacing, borderRadius } from '../styles/commonStyles';
+import { useAuth } from '../contexts/AuthContext';
 
 type PoliceLoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'PoliceLogin'>;
 
@@ -14,14 +15,25 @@ interface Props {
 export default function PoliceLoginScreen({ navigation }: Props): React.JSX.Element {
   const [unitId, setOfficerId] = useState<string>('');
   const [password, setPassword] = useState<string>('');
+  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const { login } = useAuth();
 
-  const handleLogin = (): void => {
+  const handleLogin = async (): Promise<void> => {
     if (!unitId || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
-    // Navigate to police dashboard with unitId
-    navigation.navigate('PoliceTabs', { unitId });
+    
+    try {
+      setIsLoading(true);
+      await login(unitId, password);
+      Alert.alert('Success', 'Login successful');
+      navigation.navigate("PoliceTabs", {unitId: unitId});
+    } catch (error) {
+      Alert.alert('Error', error instanceof Error ? error.message : 'Login failed');
+    } finally {
+      setIsLoading(false);
+    }
   };
 
   return (
@@ -61,8 +73,10 @@ export default function PoliceLoginScreen({ navigation }: Props): React.JSX.Elem
               <Text style={styles.forgotPasswordText}>Forgot Password?</Text>
             </TouchableOpacity>
             
-            <TouchableOpacity style={commonStyles.button} onPress={handleLogin}>
-              <Text style={commonStyles.buttonText}>Log In</Text>
+            <TouchableOpacity style={commonStyles.button} onPress={handleLogin} disabled={isLoading}>
+              {isLoading ? (
+                  <ActivityIndicator size="small" color={colors.white} />
+                ) : (<Text style={commonStyles.buttonText}>Log In</Text>)}
             </TouchableOpacity>
           </View>
         </View>
