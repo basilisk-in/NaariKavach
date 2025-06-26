@@ -6,6 +6,7 @@ interface AuthContextType {
   user: UserData | null;
   token: string | null;
   isLoading: boolean;
+  isInitializing: boolean;
   login: (username: string, password: string) => Promise<boolean>;
   register: (username: string, email: string, password: string, re_password: string) => Promise<boolean>;
   logout: () => Promise<void>;
@@ -23,6 +24,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const [user, setUser] = useState<UserData | null>(null);
   const [token, setToken] = useState<string | null>(null);
   const [isLoading, setIsLoading] = useState<boolean>(true);
+  const [isInitializing, setIsInitializing] = useState<boolean>(true);
 
   // Check authentication status on app start
   useEffect(() => {
@@ -32,6 +34,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const checkAuthStatus = async () => {
     try {
       setIsLoading(true);
+      setIsInitializing(true);
       const savedToken = await tokenManager.getToken();
       const savedUser = await tokenManager.getUserData();
 
@@ -39,6 +42,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
         setToken(savedToken);
         setUser(savedUser);
         setIsAuthenticated(true);
+        
+        // Add a delay to show splash screen for at least 3 seconds when auto-logging in
+        await new Promise(resolve => setTimeout(resolve, 3000));
       } else {
         setIsAuthenticated(false);
         setUser(null);
@@ -51,6 +57,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
       setToken(null);
     } finally {
       setIsLoading(false);
+      setIsInitializing(false);
     }
   };
 
@@ -143,6 +150,7 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     user,
     token,
     isLoading,
+    isInitializing,
     login,
     register,
     logout,

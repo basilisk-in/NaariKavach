@@ -117,21 +117,22 @@ function PoliceTabNavigator(): React.JSX.Element {
     >
       <PoliceTab.Screen name="Dashboard" component={PoliceDashboardScreen} />
       <PoliceTab.Screen name="Alerts" component={PoliceAlertsScreen} />
-      <PoliceTab.Screen name="Map" component={PoliceDashboardScreen} />
     </PoliceTab.Navigator>
   );
 }
 
 // Main App Navigator
 export default function AppNavigator(): React.JSX.Element {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isInitializing } = useAuth();
 
-  // Show loading spinner while checking authentication
-  if (isLoading) {
+  // Show splash screen while checking authentication status
+  if (isInitializing) {
     return (
-      <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: colors.white }}>
-        <ActivityIndicator size="large" color={colors.darkGray} />
-      </View>
+      <NavigationContainer>
+        <Stack.Navigator screenOptions={{ headerShown: false }}>
+          <Stack.Screen name="Splash" component={SplashScreen} />
+        </Stack.Navigator>
+      </NavigationContainer>
     );
   }
 

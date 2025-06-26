@@ -16,7 +16,7 @@ interface Props {
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const svgWidth = screenWidth * 1.18; // 100% of screen width , reduce if needed
 const svgHeight = (svgWidth * 360) / 400; // Text Controls numerator reduction to push text up and denominator to push it down
-const dynamicOffset = screenWidth * 0.04; // Moves SVG to the right(offset) based on screen width
+const dynamicOffset = screenWidth * 0.07; // Moves SVG to the right(offset) based on screen width
 
 //Requires Testing on different screen sizes
 const isSmallScreen = screenWidth < 375;

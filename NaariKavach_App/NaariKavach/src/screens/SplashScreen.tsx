@@ -4,6 +4,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { colors, spacing } from '../styles/commonStyles';
 import LandingSvg from '../components/LandingSvg';
+import { useAuth } from '../contexts/AuthContext';
 
 type SplashScreenNavigationProp = StackNavigationProp<RootStackParamList, 'Splash'>;
 
@@ -14,8 +15,10 @@ interface Props {
 const { width: screenWidth, height: screenHeight } = Dimensions.get('window');
 const splashSvgWidth = screenWidth * 1.18; // Increased to 80% of screen width for splash
 const splashSvgHeight = (splashSvgWidth * 360) / 400; // Maintain aspect ratio
+const dynamicOffset = screenWidth * 0.07
 
 export default function SplashScreen({ navigation }: Props): React.JSX.Element {
+  const { isAuthenticated, isInitializing } = useAuth();
   const fadeAnim = useRef(new Animated.Value(0)).current;
   const scaleAnim = useRef(new Animated.Value(0.5)).current;
   const textFadeAnim = useRef(new Animated.Value(0)).current;
@@ -69,16 +72,29 @@ export default function SplashScreen({ navigation }: Props): React.JSX.Element {
 
     const dotTimer = setTimeout(animateDots, 1000);
 
-    // Navigate to Landing screen after 3 seconds
-    const timer = setTimeout(() => {
-      navigation.replace('Landing');
-    }, 3000);
+    // Navigation logic: if we're not initializing anymore, handle navigation
+    if (!isInitializing) {
+      const timer = setTimeout(() => {
+        if (isAuthenticated) {
+          // User has saved token, navigate to main app
+          // The navigation will be handled by AppNavigator automatically
+          return;
+        } else {
+          // No saved token, go to Landing screen
+          navigation.replace('Landing');
+        }
+      }, 3000);
+
+      return () => {
+        clearTimeout(timer);
+        clearTimeout(dotTimer);
+      };
+    }
 
     return () => {
-      clearTimeout(timer);
       clearTimeout(dotTimer);
     };
-  }, [navigation, fadeAnim, scaleAnim, textFadeAnim, textSlideAnim, dotAnim1, dotAnim2, dotAnim3]);
+  }, [navigation, isAuthenticated, isInitializing, fadeAnim, scaleAnim, textFadeAnim, textSlideAnim, dotAnim1, dotAnim2, dotAnim3]);
 
   return (
     <View style={styles.container}>
@@ -88,7 +104,7 @@ export default function SplashScreen({ navigation }: Props): React.JSX.Element {
             styles.logoContainer,
             {
               opacity: fadeAnim,
-              transform: [{ scale: scaleAnim }],
+              transform: [{ scale: scaleAnim }, { translateX: dynamicOffset }],
             },
           ]}
         >
@@ -135,6 +151,7 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: colors.white,
+    
   },
   content: {
     flex: 1,

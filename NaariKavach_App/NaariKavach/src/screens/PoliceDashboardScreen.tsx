@@ -168,7 +168,7 @@ export default function PoliceDashboardScreen({ navigation }: Props): React.JSX.
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
-                <Ionicons name="arrow-back" size={24} color={colors.darkGray} />
+                <Ionicons name="power" size={24} color={colors.darkGray} />
           </TouchableOpacity> 
           <Text style={styles.headerTitle}>Alert Dashboard</Text>
           <TouchableOpacity
