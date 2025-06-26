@@ -1,9 +1,11 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { UserTabParamList } from '../navigation/AppNavigator';
 import { commonStyles, colors, spacing, borderRadius } from '../styles/commonStyles';
+import api from '../services/services';
+import * as Location from 'expo-location';
 
 type UserDashboardScreenNavigationProp = BottomTabNavigationProp<UserTabParamList, 'Home'>;
 
@@ -13,10 +15,76 @@ interface Props {
 
 export default function UserDashboardScreen({ navigation }: Props): React.JSX.Element {
   const [isSafe, setIsSafe] = useState(true);
+  const [location, setLocation] = useState<Location.LocationObject | null>(null);
+  const [locationPermission, setLocationPermission] = useState<Location.PermissionStatus | null>(null);
+  const [isLoadingLocation, setIsLoadingLocation] = useState(false);
 
-  const handleEmergencyPress = (): void => {
+  // Get current location on component mount
+  useEffect(() => {
+    getCurrentLocation();
+  }, []);
+
+  const getCurrentLocation = async (): Promise<void> => {
+    try {
+      setIsLoadingLocation(true);
+      
+      // Request permission
+      const { status } = await Location.requestForegroundPermissionsAsync();
+      setLocationPermission(status);
+      
+      if (status !== 'granted') {
+        Alert.alert(
+          'Permission Denied',
+          'Location permission is required to use this feature. Please enable location access in your device settings.',
+          [{ text: 'OK' }]
+        );
+        return;
+      }
+
+      // Get current location
+      const currentLocation = await Location.getCurrentPositionAsync({
+        accuracy: Location.Accuracy.High,
+      });
+      
+      setLocation(currentLocation);
+      console.log('Current location:', currentLocation.coords);
+      
+    } catch (error) {
+      console.error('Error getting location:', error);
+      Alert.alert(
+        'Location Error',
+        'Unable to get your current location. Please check your location settings and try again.',
+        [{ text: 'OK' }]
+      );
+    } finally {
+      setIsLoadingLocation(false);
+    }
+  };
+  const handleEmergencyPress = async (): Promise<void> => {
     setIsSafe(false);
-    Alert.alert('Emergency Alert', 'Emergency alert sent! Your status has been updated to unsafe.');
+    
+    if (location) {
+      const { latitude, longitude } = location.coords;
+      console.log('Emergency triggered at:', { latitude, longitude });
+      
+      Alert.alert(
+        'Emergency Alert', 
+        `Emergency alert sent! Your current location (${latitude.toFixed(6)}, ${longitude.toFixed(6)}) has been shared with authorities and emergency contacts.`
+      );
+      
+      // Here you can add API call to create SOS with location
+      const response = await api.auth.getCurrentUser();
+      if (response.success && response.data?.username) {
+        const res = await api.sos.createSOS(response.data?.username, 1, latitude, longitude);
+        console.log('SOS created:', res);
+      }
+      // api.sos.createSOS('Emergency', 1, latitude, longitude);
+    } else {
+      Alert.alert(
+        'Emergency Alert', 
+        'Some error occured.'
+      );
+    }
   };
 
   return (
@@ -59,12 +127,52 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
               />
             </View>
             <Text style={styles.statusText}>{isSafe ? 'Safe' : 'Unsafe'}</Text>
-          </View><TouchableOpacity 
+          </View>
+
+          {/* Location Status Card */}
+          <TouchableOpacity 
+            style={styles.statusCard}
+            onPress={getCurrentLocation}
+          >
+            <View style={[styles.statusIcon, !isSafe && styles.unsafeStatusIcon]}>
+              {isSafe ?
+                <Ionicons 
+                  name={locationPermission === 'granted' && location ? "location" : "location-outline"} 
+                  size={24} 
+                  color={locationPermission === 'granted' && location ? "#4CAF50" : colors.darkGray} 
+                />
+                : <Ionicons 
+                    name="alert-circle" 
+                    size={24} 
+                    color={colors.white}
+                  />
+              }
+            </View>
+            <View style={styles.locationInfo}>
+              <Text style={styles.statusText}>
+                {isSafe ? 
+                  isLoadingLocation 
+                    ? 'Getting location...' 
+                    : locationPermission === 'granted' && location
+                      ? 'Location tracked'
+                      : 'Tap to enable location'
+                  : "Distress signal sent"
+                }
+              </Text>
+              {location && (
+                <Text style={styles.locationCoords}>
+                  {`${location.coords.latitude.toFixed(6)}, ${location.coords.longitude.toFixed(6)}`}
+                </Text>
+              )}
+            </View>
+          </TouchableOpacity>
+
+          <TouchableOpacity 
             style={styles.statusCard}
             onPress={() => navigation.navigate('Safety')}
           >
             <View style={styles.statusIcon}>
-              <Ionicons name="location" size={24} color={colors.darkGray} />
+              <Ionicons name="people" size={24} color={colors.darkGray} />
             </View>
             <Text style={styles.statusText}>Share Location with Family/Friends</Text>
           </TouchableOpacity>
@@ -156,6 +264,17 @@ const styles = StyleSheet.create({
   },
   unsafeStatusIcon: {
     backgroundColor: '#FF4444',
+  },
+  loadingStatusIcon: {
+    backgroundColor: '#FFFFFF',
+  },
+  locationInfo: {
+    flex: 1,
+  },
+  locationCoords: {
+    fontSize: 12,
+    color: colors.gray,
+    marginTop: 2,
   },
   statusText: {
     fontSize: 16,

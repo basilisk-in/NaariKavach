@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, ActivityIndicator, Alert } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { CompositeNavigationProp } from '@react-navigation/native';
@@ -14,7 +14,7 @@ type PoliceDashboardNavigationProp = CompositeNavigationProp<
   StackNavigationProp<RootStackParamList>
 >;
 
-interface Alert {
+interface AlertDetails {
   id: number;
   camera: string;
   location: string;
@@ -25,7 +25,7 @@ interface Props {
   navigation: PoliceDashboardNavigationProp;
 }
 
-const recentAlerts: Alert[] = [
+const recentAlerts: AlertDetails[] = [
   {
     id: 1,
     camera: 'Camera 1',
@@ -121,7 +121,7 @@ export default function PoliceDashboardScreen({ navigation }: Props): React.JSX.
     getLocationWithTimeout();
   }, []);
 
-  const handleAlertPress = (alert: Alert): void => {
+  const handleAlertPress = (alert: AlertDetails): void => {
     navigation.navigate('AlertDetails', { alert });
   };
   
@@ -167,7 +167,25 @@ export default function PoliceDashboardScreen({ navigation }: Props): React.JSX.
     <SafeAreaView style={commonStyles.safeArea}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
+          <TouchableOpacity onPress={() => {
+            Alert.alert(
+              'Logout',
+              'Are you sure you want to logout?',
+              [
+                {
+                  text: 'Cancel',
+                  style: 'cancel',
+                },
+                {
+                  text: 'Logout',
+                  style: 'destructive',
+                  onPress: async () => {
+                    navigation.navigate("Splash");
+                  },
+                },
+              ]
+            );
+          }}>
                 <Ionicons name="power" size={24} color={colors.darkGray} />
           </TouchableOpacity> 
           <Text style={styles.headerTitle}>Alert Dashboard</Text>
