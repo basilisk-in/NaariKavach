@@ -64,7 +64,7 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
 
           {/* User Info */}
           <View style={styles.userInfo}>
-            <Text style={styles.userName}>{user ? user.name : "User"}</Text>
+            <Text style={styles.userName}>{user ? user.username : "User"}</Text>
             <Text style={styles.userEmail}>{user ? user.email : "Email"}</Text>
           </View>
 

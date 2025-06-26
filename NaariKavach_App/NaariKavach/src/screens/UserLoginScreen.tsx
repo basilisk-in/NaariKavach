@@ -5,6 +5,7 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { commonStyles, colors, spacing, borderRadius } from '../styles/commonStyles';
 import { useAuth } from '../contexts/AuthContext';
+import api from '../services/services';
 
 type UserLoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'UserLogin'>;
 
@@ -16,7 +17,13 @@ export default function UserLoginScreen({ navigation }: Props): React.JSX.Elemen
   const [email, setEmail] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
-  const { login } = useAuth();
+  const { isAuthenticated, login } = useAuth();
+
+  if (isAuthenticated) {
+    // If user is already authenticated, redirect to home or dashboard
+    // navigation.navigate("UserTabs");
+    return <></>; // Return empty fragment while redirecting
+  }
 
   const handleLogin = async (): Promise<void> => {
     if (!email || !password) {
@@ -28,7 +35,7 @@ export default function UserLoginScreen({ navigation }: Props): React.JSX.Elemen
       setIsLoading(true);
       await login(email, password);
       Alert.alert('Success', 'Login successful');
-      // Navigation is handled automatically by the AuthContext
+      // navigation.navigate("UserTabs");
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Login failed');
     } finally {

@@ -1,13 +1,15 @@
 import React, { createContext, useContext, useEffect, useState, ReactNode } from 'react';
-import AuthService, { UserData } from '../services/AuthService';
+import { tokenManager, authApi, UserData } from '../services/services';
 
 interface AuthContextType {
   isAuthenticated: boolean;
   user: UserData | null;
   token: string | null;
   isLoading: boolean;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<boolean>;
+  register: (username: string, email: string, password: string, re_password: string) => Promise<boolean>;
   logout: () => Promise<void>;
+  getCurrentUser: () => Promise<boolean>;
 }
 
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
@@ -30,8 +32,8 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
   const checkAuthStatus = async () => {
     try {
       setIsLoading(true);
-      const savedToken = await AuthService.getToken();
-      const savedUser = await AuthService.getUserData();
+      const savedToken = await tokenManager.getToken();
+      const savedUser = await tokenManager.getUserData();
 
       if (savedToken && savedUser) {
         setToken(savedToken);
@@ -52,27 +54,87 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     }
   };
 
-  const login = async (email: string, password: string) => {
+  const login = async (username: string, password: string): Promise<boolean> => {
     try {
-      const response = await AuthService.login(email, password);
-      setToken(response.token);
-      setUser(response.user);
-      setIsAuthenticated(true);
+      setIsLoading(true);
+      const response = await authApi.login(username, password);
+      
+      if (response.success && response.data) {
+        // Token is already saved by authApi.login
+        const savedToken = await tokenManager.getToken();
+        const savedUser = await tokenManager.getUserData();
+        
+        if (savedToken && savedUser) {
+          setToken(savedToken);
+          setUser(savedUser);
+          setIsAuthenticated(true);
+          return true;
+        }
+      }
+      
+      return false;
     } catch (error) {
-      console.error('Login failed:', error);
-      throw error;
+      console.error('Login error:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
     }
   };
 
-  const logout = async () => {
+  const register = async (username: string, email: string, password: string, re_password: string): Promise<boolean> => {
     try {
-      await AuthService.logout();
-      setToken(null);
-      setUser(null);
-      setIsAuthenticated(false);
+      setIsLoading(true);
+      const response = await authApi.register(username, email, password, re_password);
+      
+      if (response.success) {
+        return true;
+      }
+      
+      return false;
     } catch (error) {
-      console.error('Logout failed:', error);
-      throw error;
+      console.error('Registration error:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const getCurrentUser = async (): Promise<boolean> => {
+    try {
+      setIsLoading(true);
+      const response = await authApi.getCurrentUser();
+      
+      if (response.success && response.data) {
+        setUser(response.data);
+        return true;
+      }
+      
+      return false;
+    } catch (error) {
+      console.error('Get current user error:', error);
+      return false;
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  const logout = async (): Promise<void> => {
+    try {
+      setIsLoading(true);
+      await authApi.logout();
+      
+      // Clear local state
+      setIsAuthenticated(false);
+      setUser(null);
+      setToken(null);
+    } catch (error) {
+      console.error('Logout error:', error);
+      // Still clear local state even if API call fails
+      setIsAuthenticated(false);
+      setUser(null);
+      setToken(null);
+    } finally {
+      setIsLoading(false);
     }
   };
 
@@ -82,7 +144,9 @@ export const AuthProvider: React.FC<AuthProviderProps> = ({ children }) => {
     token,
     isLoading,
     login,
+    register,
     logout,
+    getCurrentUser,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

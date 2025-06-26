@@ -4,7 +4,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { commonStyles, colors, spacing, borderRadius } from '../styles/commonStyles';
-import api from '../services/services';
+import { useAuth } from '../contexts/AuthContext';
 
 type SignUpScreenNavigationProp = StackNavigationProp<RootStackParamList, 'SignUp'>;
 
@@ -13,6 +13,7 @@ interface Props {
 }
 
 export default function SignUpScreen({ navigation }: Props): React.JSX.Element {
+  const { register, isLoading } = useAuth();
   const [username, setUsername] = useState<string>('');
   const [email, setEmail] = useState<string>('');
   const [phoneNumber, setPhoneNumber] = useState<string>('');
@@ -44,12 +45,12 @@ const handleSignUp = async (): Promise<void> => {
   if (!valid) return;
 
   try {
-    const response = await api.auth.register(username, email, password, confirmPassword);
-    if (response.success) {
+    const success = await register(username, email, password, confirmPassword);
+    if (success) {
       Alert.alert('Success', 'Account created successfully');
       navigation.navigate('UserLogin');
     } else {
-      Alert.alert('Error', response.message || 'Failed to create account');
+      Alert.alert('Error', 'Failed to create account');
     }
   } catch (error) {
     Alert.alert('Error', 'Something went wrong during sign up');
