@@ -15,6 +15,7 @@ import {
   HiViewList,
   HiChevronDown,
   HiChevronRight,
+  HiChevronLeft,
   HiLogout,
 } from 'react-icons/hi'
 import {APIProvider, Map, AdvancedMarker, Pin, InfoWindow} from '@vis.gl/react-google-maps'
@@ -57,6 +58,12 @@ export function Dashboard() {
   
   // SOS requests state - starts empty, populated by real-time Socket.IO events
   const [sosRequests, setSosRequests] = useState([])
+  
+  // SOS Images state management
+  const [sosImages, setSosImages] = useState({}) // {sosId: [image1, image2, ...]}
+  const [imagesLoading, setImagesLoading] = useState({}) // {sosId: boolean}
+  const [currentImageIndex, setCurrentImageIndex] = useState({}) // {sosId: number}
+  const [imageErrors, setImageErrors] = useState({}) // {sosId: string}
 
   // Reusable function to fetch SOS data
   const fetchSOSData = async (isRefresh = false) => {
@@ -113,8 +120,73 @@ export function Dashboard() {
     
     try {
       await fetchSOSData(true)
+      
+      // Clear images cache and re-fetch images for currently expanded SOS
+      console.log('🗑️ Clearing images cache...')
+      setSosImages({})
+      setCurrentImageIndex({})
+      setImageErrors({})
+      
+      // Re-fetch images for expanded SOS if any
+      if (expandedRowId) {
+        console.log(`🔄 Re-fetching images for expanded SOS ${expandedRowId}...`)
+        await fetchSOSImages(expandedRowId, true) // Force refresh
+      }
+      
     } finally {
       setIsRefreshing(false)
+    }
+  }
+
+  // Function to fetch SOS images
+  const fetchSOSImages = async (sosId, forceRefresh = false) => {
+    // Don't fetch if already loading or already have images (unless forcing refresh)
+    if (!forceRefresh && (imagesLoading[sosId] || sosImages[sosId])) {
+      return
+    }
+
+    console.log(`📸 Fetching images for SOS ${sosId}...`)
+    setImagesLoading(prev => ({ ...prev, [sosId]: true }))
+    setImageErrors(prev => ({ ...prev, [sosId]: null }))
+
+    try {
+      const response = await fetch(`http://localhost:8000/api/get-sos-images/${sosId}/`, {
+        method: 'GET',
+        headers: {
+          'Content-Type': 'application/json',
+          // Note: This endpoint doesn't require auth based on API guide
+        }
+      })
+
+      if (response.ok) {
+        const data = await response.json()
+        console.log(`✅ Images fetched for SOS ${sosId}:`, data)
+        
+        if (data.status === 'success' && data.images) {
+          // Store images and initialize current index to 0
+          setSosImages(prev => ({ ...prev, [sosId]: data.images }))
+          setCurrentImageIndex(prev => ({ ...prev, [sosId]: 0 }))
+          console.log(`📋 Loaded ${data.images.length} image(s) for SOS ${sosId}`)
+        } else {
+          // No images found
+          setSosImages(prev => ({ ...prev, [sosId]: [] }))
+          console.log(`📭 No images found for SOS ${sosId}`)
+        }
+      } else if (response.status === 404) {
+        // SOS not found or no images
+        setSosImages(prev => ({ ...prev, [sosId]: [] }))
+        console.log(`📭 No images found for SOS ${sosId} (404)`)
+      } else {
+        throw new Error(`HTTP ${response.status}: ${response.statusText}`)
+      }
+    } catch (error) {
+      console.error(`❌ Error fetching images for SOS ${sosId}:`, error)
+      setImageErrors(prev => ({ 
+        ...prev, 
+        [sosId]: `Failed to load images: ${error.message}` 
+      }))
+    } finally {
+      setImagesLoading(prev => ({ ...prev, [sosId]: false }))
     }
   }
 
@@ -123,6 +195,13 @@ export function Dashboard() {
     // Fetch existing data first
     fetchSOSData(false)
   }, []) // Empty dependency array - run once on mount
+
+  // Fetch images when a row is expanded
+  useEffect(() => {
+    if (expandedRowId && !sosImages[expandedRowId] && !imagesLoading[expandedRowId]) {
+      fetchSOSImages(expandedRowId)
+    }
+  }, [expandedRowId]) // Dependency on expandedRowId
 
   // Socket.IO Integration - Following React Socket.IO best practices
   useEffect(() => {
@@ -401,6 +480,35 @@ export function Dashboard() {
     setShowInfoWindow(false)
     setMapSelectedSOS(null)
   }, [])
+
+  // Image carousel navigation handlers
+  const handlePreviousImage = (sosId) => {
+    const images = sosImages[sosId] || []
+    if (images.length <= 1) return
+    
+    setCurrentImageIndex(prev => {
+      const currentIndex = prev[sosId] || 0
+      const newIndex = currentIndex - 1
+      return {
+        ...prev,
+        [sosId]: newIndex < 0 ? images.length - 1 : newIndex
+      }
+    })
+  }
+
+  const handleNextImage = (sosId) => {
+    const images = sosImages[sosId] || []
+    if (images.length <= 1) return
+    
+    setCurrentImageIndex(prev => {
+      const currentIndex = prev[sosId] || 0
+      const newIndex = currentIndex + 1
+      return {
+        ...prev,
+        [sosId]: newIndex >= images.length ? 0 : newIndex
+      }
+    })
+  }
 
   // Officer assignment input handler
   const handleAssignmentInputChange = (sosId, field, value) => {
@@ -989,6 +1097,174 @@ export function Dashboard() {
                                                 </span>
                                                 <span className="text-gray-500 ml-2">({sos.last_location_update})</span>
                                               </div>
+                                            </div>
+                                          </div>
+
+                                          {/* Images Section */}
+                                          <div className="mb-4">
+                                            <div className="flex items-center justify-between mb-2">
+                                              <h4 className="text-sm font-medium text-gray-700">Images</h4>
+                                              <button
+                                                onClick={(e) => {
+                                                  e.stopPropagation()
+                                                  // Clear images for this SOS and re-fetch
+                                                  setSosImages(prev => {
+                                                    const updated = {...prev}
+                                                    delete updated[sos.id]
+                                                    return updated
+                                                  })
+                                                  setCurrentImageIndex(prev => {
+                                                    const updated = {...prev}
+                                                    delete updated[sos.id]
+                                                    return updated
+                                                  })
+                                                  setImageErrors(prev => {
+                                                    const updated = {...prev}
+                                                    delete updated[sos.id]
+                                                    return updated
+                                                  })
+                                                  fetchSOSImages(sos.id, true)
+                                                }}
+                                                disabled={imagesLoading[sos.id]}
+                                                className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+                                                  imagesLoading[sos.id]
+                                                    ? 'bg-gray-400 text-white cursor-not-allowed'
+                                                    : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                }`}
+                                                title="Refresh images for this SOS"
+                                              >
+                                                <HiRefresh className={`w-3 h-3 ${imagesLoading[sos.id] ? 'animate-spin' : ''}`} />
+                                                {imagesLoading[sos.id] ? 'Loading...' : 'Refresh'}
+                                              </button>
+                                            </div>
+                                            <div className="bg-white p-3 rounded border">
+                                              {imagesLoading[sos.id] ? (
+                                                // Loading state
+                                                <div className="flex items-center justify-center py-8">
+                                                  <div className="flex flex-col items-center gap-2">
+                                                    <div className="w-6 h-6 border-2 border-blue-600 border-t-transparent rounded-full animate-spin"></div>
+                                                    <span className="text-sm text-gray-500">Loading images...</span>
+                                                  </div>
+                                                </div>
+                                              ) : imageErrors[sos.id] ? (
+                                                // Error state
+                                                <div className="flex items-center justify-center py-8">
+                                                  <div className="text-center">
+                                                    <div className="text-red-600 text-sm mb-2">Failed to load images</div>
+                                                    <div className="text-xs text-gray-500">{imageErrors[sos.id]}</div>
+                                                    <button
+                                                      onClick={(e) => {
+                                                        e.stopPropagation()
+                                                        fetchSOSImages(sos.id)
+                                                      }}
+                                                      className="mt-2 px-3 py-1 bg-blue-600 text-white text-xs rounded hover:bg-blue-700"
+                                                    >
+                                                      Retry
+                                                    </button>
+                                                  </div>
+                                                </div>
+                                              ) : sosImages[sos.id] && sosImages[sos.id].length > 0 ? (
+                                                // Images available - show carousel
+                                                (() => {
+                                                  const images = sosImages[sos.id]
+                                                  const currentIndex = currentImageIndex[sos.id] || 0
+                                                  const currentImage = images[currentIndex]
+                                                  
+                                                  return (
+                                                    <div className="space-y-3">
+                                                      {/* Image Display */}
+                                                      <div className="relative">
+                                                        <img
+                                                          src={currentImage.image_url}
+                                                          alt={currentImage.description || `SOS Evidence ${currentIndex + 1}`}
+                                                          className="w-full max-w-md h-48 object-cover rounded border mx-auto block"
+                                                          onError={(e) => {
+                                                            e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyOEMyNC40MTgzIDI4IDI4IDI0LjQxODMgMjggMjBDMjggMTUuNTgxNyAyNC40MTgzIDEyIDIwIDEyQzE1LjU4MTcgMTIgMTIgMTUuNTgxNyAxMiAyMEMxMiAyNC40MTgzIDE1LjU4MTcgMjggMjAgMjhaIiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIvPgo8L3N2Zz4K'
+                                                            e.target.alt = 'Failed to load image'
+                                                          }}
+                                                        />
+                                                        
+                                                        {/* Navigation arrows overlay (only show if multiple images) */}
+                                                        {images.length > 1 && (
+                                                          <>
+                                                            <button
+                                                              onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                handlePreviousImage(sos.id)
+                                                              }}
+                                                              className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-opacity"
+                                                              title="Previous image"
+                                                            >
+                                                              <HiChevronLeft className="w-4 h-4" />
+                                                            </button>
+                                                            <button
+                                                              onClick={(e) => {
+                                                                e.stopPropagation()
+                                                                handleNextImage(sos.id)
+                                                              }}
+                                                              className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-opacity"
+                                                              title="Next image"
+                                                            >
+                                                              <HiChevronRight className="w-4 h-4" />
+                                                            </button>
+                                                          </>
+                                                        )}
+                                                      </div>
+                                                      
+                                                      {/* Image Info */}
+                                                      <div className="text-center space-y-1">
+                                                        {currentImage.description && (
+                                                          <p className="text-sm text-gray-700 font-medium">
+                                                            {currentImage.description}
+                                                          </p>
+                                                        )}
+                                                        <p className="text-xs text-gray-500">
+                                                          Uploaded: {new Date(currentImage.uploaded_at).toLocaleString()}
+                                                        </p>
+                                                        {images.length > 1 && (
+                                                          <p className="text-xs text-gray-500">
+                                                            Image {currentIndex + 1} of {images.length}
+                                                          </p>
+                                                        )}
+                                                      </div>
+                                                      
+                                                      {/* Navigation buttons (only show if multiple images) */}
+                                                      {images.length > 1 && (
+                                                        <div className="flex justify-center gap-2">
+                                                          <button
+                                                            onClick={(e) => {
+                                                              e.stopPropagation()
+                                                              handlePreviousImage(sos.id)
+                                                            }}
+                                                            className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-white text-xs rounded hover:bg-gray-200 transition-colors"
+                                                          >
+                                                            <HiChevronLeft className="w-3 h-3" />
+                                                            Previous
+                                                          </button>
+                                                          <button
+                                                            onClick={(e) => {
+                                                              e.stopPropagation()
+                                                              handleNextImage(sos.id)
+                                                            }}
+                                                            className="flex items-center gap-1 px-3 py-1 bg-gray-100 text-white text-xs rounded hover:bg-gray-200 transition-colors"
+                                                          >
+                                                            Next
+                                                            <HiChevronRight className="w-3 h-3" />
+                                                          </button>
+                                                        </div>
+                                                      )}
+                                                    </div>
+                                                  )
+                                                })()
+                                              ) : (
+                                                // No images state
+                                                <div className="flex items-center justify-center py-8">
+                                                  <div className="text-center">
+                                                    <div className="text-gray-500 text-sm mb-2">No images uploaded</div>
+                                                    <div className="text-xs text-gray-400">Images will appear here when uploaded</div>
+                                                  </div>
+                                                </div>
+                                              )}
                                             </div>
                                           </div>
                                         </div>
