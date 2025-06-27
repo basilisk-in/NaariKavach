@@ -10,6 +10,7 @@ import api, { EmergencyContact, emergencyContactsManager } from '../services/ser
 import * as Location from 'expo-location';
 import Toast from 'react-native-toast-message';
 import io, { Socket } from 'socket.io-client';
+import { LandingSvg } from '../components/LandingSvg';
 
 type UserDashboardScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<UserTabParamList, 'Home'>,
@@ -779,9 +780,7 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
 
           {/* Hero Image Placeholder */}
           <View style={styles.imageContainer}>
-            <View style={styles.imagePlaceholder}>
-              <Ionicons name="shield-outline" size={100} color={colors.gray} />
-            </View>
+            <LandingSvg width={280} height={245} fill={colors.darkGray} />
           </View>
 
           {

@@ -11,6 +11,7 @@ import { commonStyles, colors, spacing, borderRadius } from '../styles/commonSty
 import MapView, { Region, Marker } from 'react-native-maps';
 import * as Location from 'expo-location';
 import io, { Socket } from 'socket.io-client';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { useAuth } from '../contexts/AuthContext';
 
 type PoliceDashboardNavigationProp = CompositeNavigationProp<
@@ -25,6 +26,15 @@ interface SOSLocationUpdate {
   latitude: number;
   longitude: number;
   timestamp: string;
+}
+
+interface ResolvedSOS {
+  sos_id: string;
+  resolvedAt: string;
+  resolvedBy: string;
+  latitude?: number;
+  longitude?: number;
+  responseTime: string;
 }
 
 interface Props {
@@ -54,7 +64,6 @@ export default function PoliceDashboardScreen({ navigation, route }: Props): Rea
   const drawerHeight = useRef(new Animated.Value(minDrawerHeight)).current;
   const lastDrawerHeight = useRef(minDrawerHeight);
   const panGestureRef = useRef(null);
-
   const { logout, isAuthenticated } = useAuth(); // Get isAuthenticated state
   
   // Monitor authentication state and redirect when logged out
@@ -77,41 +86,60 @@ export default function PoliceDashboardScreen({ navigation, route }: Props): Rea
     }
   }, [isAuthenticated, navigation]);
   
-  // Dummy data for recent SOS history
-  const [recentHistory] = useState([
-    {
-      id: '1',
-      status: 'resolved',
-      timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-      location: { latitude: 28.6139, longitude: 77.2090 },
-      responseTime: '15 min',
-      resolvedBy: 'Unit-007'
-    },
-    {
-      id: '2', 
-      status: 'resolved',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 2).toISOString(), // 2 hours ago
-      location: { latitude: 28.7041, longitude: 77.1025 },
-      responseTime: '12 min',
-      resolvedBy: 'Unit-003'
-    },
-    {
-      id: '3',
-      status: 'resolved', 
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 4).toISOString(), // 4 hours ago
-      location: { latitude: 28.5355, longitude: 77.3910 },
-      responseTime: '18 min',
-      resolvedBy: 'Unit-012'
-    },
-    {
-      id: '4',
-      status: 'resolved',
-      timestamp: new Date(Date.now() - 1000 * 60 * 60 * 6).toISOString(), // 6 hours ago
-      location: { latitude: 28.6517, longitude: 77.2219 },
-      responseTime: '22 min', 
-      resolvedBy: 'Unit-005'
+  // Recent SOS history from AsyncStorage
+  const [recentHistory, setRecentHistory] = useState<ResolvedSOS[]>([]);
+
+  // Load recent resolved SOS history from AsyncStorage
+  useEffect(() => {
+    loadRecentHistory();
+  }, []);
+
+  // Add focus listener to refresh recent history when user returns to this screen
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      loadRecentHistory();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
+
+  const loadRecentHistory = async (): Promise<void> => {
+    try {
+      const storedHistory = await AsyncStorage.getItem('resolved_sos');
+      if (storedHistory) {
+        const resolvedSOSData: ResolvedSOS[] = JSON.parse(storedHistory);
+        setRecentHistory(resolvedSOSData.slice(0, 10)); // Show last 10 resolved SOS
+      }
+    } catch (error) {
+      console.error('Error loading recent history:', error);
     }
-  ]);
+  };
+
+  const storeAssignedSOSFromUpdate = async (data: SOSLocationUpdate): Promise<void> => {
+    try {
+      const existingAssigned = await AsyncStorage.getItem(`assigned_sos_${unitId}`);
+      const assignedSOSList = existingAssigned ? JSON.parse(existingAssigned) : [];
+      
+      // Check if SOS is already assigned
+      const alreadyAssigned = assignedSOSList.find((item: any) => item.sos_id === data.sos_id);
+      if (!alreadyAssigned) {
+        const newSOS = {
+          sos_id: data.sos_id,
+          latitude: data.latitude,
+          longitude: data.longitude,
+          timestamp: data.timestamp,
+          status: 'assigned' as const,
+          priority: 'high' as const, // Default priority for incoming SOS
+        };
+        
+        const updatedList = [...assignedSOSList, newSOS];
+        await AsyncStorage.setItem(`assigned_sos_${unitId}`, JSON.stringify(updatedList));
+        console.log(`📱 SOS ${data.sos_id} stored as assigned to unit ${unitId}`);
+      }
+    } catch (error) {
+      console.error('Error storing assigned SOS from update:', error);
+    }
+  };
   
   const socketRef = useRef<Socket | null>(null);
   
@@ -168,6 +196,9 @@ export default function PoliceDashboardScreen({ navigation, route }: Props): Rea
             console.error('❌ Invalid SOS location data received:', data);
             return;
           }
+
+          // Store this SOS as assigned to the unit
+          storeAssignedSOSFromUpdate(data);
           
           // Update the specific SOS location in the map
           setSOSLocations(prevLocations => {
@@ -521,7 +552,7 @@ export default function PoliceDashboardScreen({ navigation, route }: Props): Rea
   };
 
   const getSosDisplayName = (sosId: string, index: number): string => {
-    return `SOS ${sosId + 1}`;
+    return `SOS ${sosId}`;
   };
 
   const getTimeAgo = (timestamp: string): string => {
@@ -780,42 +811,52 @@ export default function PoliceDashboardScreen({ navigation, route }: Props): Rea
                 showsVerticalScrollIndicator={false}
                 contentContainerStyle={{ paddingBottom: 20 }}
               >
-                {recentHistory.map((item) => (
-                  <View key={item.id} style={styles.historyItem}>
-                    <View style={styles.historyItemHeader}>
-                      <View style={styles.historyItemStatus}>
-                        <Ionicons name="checkmark-circle" size={16} color="#28A745" />
-                        <Text style={styles.historyItemTitle}>SOS {item.id} Resolved</Text>
-                      </View>
-                      <Text style={styles.historyItemTime}>
-                        {getTimeAgo(item.timestamp)}
-                      </Text>
-                    </View>
-                    
-                    <View style={styles.historyItemDetails}>
-                      <View style={styles.historyItemRow}>
-                        <Ionicons name="location-outline" size={14} color={colors.gray} />
-                        <Text style={styles.historyItemLocation}>
-                          {item.location.latitude.toFixed(4)}, {item.location.longitude.toFixed(4)}
-                        </Text>
-                      </View>
-                      
-                      <View style={styles.historyItemRow}>
-                        <Ionicons name="time-outline" size={14} color={colors.gray} />
-                        <Text style={styles.historyItemResponseTime}>
-                          Response: {item.responseTime}
-                        </Text>
-                      </View>
-                      
-                      <View style={styles.historyItemRow}>
-                        <Ionicons name="shield-outline" size={14} color={colors.gray} />
-                        <Text style={styles.historyItemUnit}>
-                          Resolved by: {item.resolvedBy}
-                        </Text>
-                      </View>
-                    </View>
+                {recentHistory.length === 0 ? (
+                  <View style={styles.emptyHistoryContainer}>
+                    <Ionicons name="time-outline" size={48} color={colors.gray} />
+                    <Text style={styles.emptyHistoryTitle}>No Recent History</Text>
+                    <Text style={styles.emptyHistorySubtitle}>Resolved SOS cases will appear here</Text>
                   </View>
-                ))}
+                ) : (
+                  recentHistory.map((item) => (
+                    <View key={item.sos_id} style={styles.historyItem}>
+                      <View style={styles.historyItemHeader}>
+                        <View style={styles.historyItemStatus}>
+                          <Ionicons name="checkmark-circle" size={16} color="#28A745" />
+                          <Text style={styles.historyItemTitle}>SOS {item.sos_id} Resolved</Text>
+                        </View>
+                        <Text style={styles.historyItemTime}>
+                          {getTimeAgo(item.resolvedAt)}
+                        </Text>
+                      </View>
+                      
+                      <View style={styles.historyItemDetails}>
+                        {item.latitude && item.longitude && (
+                          <View style={styles.historyItemRow}>
+                            <Ionicons name="location-outline" size={14} color={colors.gray} />
+                            <Text style={styles.historyItemLocation}>
+                              {item.latitude.toFixed(4)}, {item.longitude.toFixed(4)}
+                            </Text>
+                          </View>
+                        )}
+                        
+                        <View style={styles.historyItemRow}>
+                          <Ionicons name="time-outline" size={14} color={colors.gray} />
+                          <Text style={styles.historyItemResponseTime}>
+                            Response: {item.responseTime}
+                          </Text>
+                        </View>
+                        
+                        <View style={styles.historyItemRow}>
+                          <Ionicons name="shield-outline" size={14} color={colors.gray} />
+                          <Text style={styles.historyItemUnit}>
+                            Resolved by: {item.resolvedBy}
+                          </Text>
+                        </View>
+                      </View>
+                    </View>
+                  ))
+                )}
               </ScrollView>
             </Animated.View>
           </Animated.View>
@@ -1193,5 +1234,23 @@ const styles = StyleSheet.create({
   historyItemUnit: {
     fontSize: 12,
     color: colors.gray,
+  },
+  emptyHistoryContainer: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingVertical: spacing.xl * 2,
+  },
+  emptyHistoryTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.darkGray,
+    marginTop: spacing.lg,
+    textAlign: 'center',
+  },
+  emptyHistorySubtitle: {
+    fontSize: 14,
+    color: colors.gray,
+    marginTop: spacing.sm,
+    textAlign: 'center',
   },
 });

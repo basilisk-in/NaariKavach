@@ -168,7 +168,7 @@ export default function HelpSupportScreen({ navigation }: Props): React.JSX.Elem
             
             <FAQItem
               question="Can I use the app without internet?"
-              answer="Basic SOS functionality works offline, but location sharing and WhatsApp features require an internet connection."
+              answer="SOS functionality works both online and offline, but location sharing via WhatsApp require an internet connection."
             />
             
             <FAQItem
