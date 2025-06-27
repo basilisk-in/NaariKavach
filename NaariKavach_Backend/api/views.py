@@ -6,11 +6,12 @@ from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, IsAdminUser
 from rest_framework.views import APIView
 
-from .models import SOS, OfficerAssignment, LocationUpdate
+from .models import SOS, OfficerAssignment, LocationUpdate, SOSImage
 from .serializers import (
     SOSSerializer, SOSCreateSerializer, 
     LocationUpdateSerializer, LocationUpdateCreateSerializer,
-    OfficerAssignmentSerializer, OfficerAssignmentCreateSerializer
+    OfficerAssignmentSerializer, OfficerAssignmentCreateSerializer,
+    SOSImageSerializer, SOSImageCreateSerializer
 )
 
 # Create Socket.IO client to emit events to our Socket.IO server
@@ -212,4 +213,111 @@ class GetAllSOSView(APIView):
             return Response({
                 "status": "error",
                 "message": f"Failed to fetch SOS entries: {str(e)}"
+            }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+class UploadSOSImagesView(APIView):
+    """
+    API endpoint to upload multiple images for an SOS request
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def post(self, request):
+        sos_id = request.data.get('sos_id')
+        images = request.FILES.getlist('images')
+        descriptions = request.data.getlist('descriptions', [])
+        
+        if not sos_id:
+            return Response({
+                "status": "error",
+                "message": "SOS ID is required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        if not images:
+            return Response({
+                "status": "error", 
+                "message": "At least one image is required"
+            }, status=status.HTTP_400_BAD_REQUEST)
+        
+        try:
+            sos_request = SOS.objects.get(id=sos_id)
+        except SOS.DoesNotExist:
+            return Response({
+                "status": "error",
+                "message": "SOS request not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        uploaded_images = []
+        errors = []
+        
+        for i, image in enumerate(images):
+            description = descriptions[i] if i < len(descriptions) else ""
+            
+            # Create image data
+            image_data = {
+                'sos_request': sos_id,
+                'image': image,
+                'description': description
+            }
+            
+            serializer = SOSImageCreateSerializer(data=image_data)
+            
+            if serializer.is_valid():
+                saved_image = serializer.save()
+                uploaded_images.append(SOSImageSerializer(saved_image, context={'request': request}).data)
+            else:
+                errors.append({
+                    'image_index': i,
+                    'errors': serializer.errors
+                })
+        
+        if uploaded_images:
+            response_data = {
+                "status": "success",
+                "message": f"Successfully uploaded {len(uploaded_images)} image(s)",
+                "uploaded_images": uploaded_images
+            }
+            
+            if errors:
+                response_data["partial_errors"] = errors
+                response_data["message"] += f" with {len(errors)} error(s)"
+            
+            return Response(response_data, status=status.HTTP_201_CREATED)
+        else:
+            return Response({
+                "status": "error",
+                "message": "Failed to upload any images",
+                "errors": errors
+            }, status=status.HTTP_400_BAD_REQUEST)
+
+class GetSOSImagesView(APIView):
+    """
+    API endpoint to retrieve all images for a specific SOS request
+    """
+    permission_classes = [permissions.AllowAny]
+    
+    def get(self, request, sos_id):
+        try:
+            sos_request = SOS.objects.get(id=sos_id)
+        except SOS.DoesNotExist:
+            return Response({
+                "status": "error",
+                "message": "SOS request not found"
+            }, status=status.HTTP_404_NOT_FOUND)
+        
+        try:
+            images = SOSImage.objects.filter(sos_request=sos_request).order_by('-uploaded_at')
+            serializer = SOSImageSerializer(images, many=True, context={'request': request})
+            
+            return Response({
+                "status": "success",
+                "message": "Images fetched successfully",
+                "sos_id": sos_id,
+                "count": images.count(),
+                "images": serializer.data
+            }, status=status.HTTP_200_OK)
+            
+        except Exception as e:
+            return Response({
+                "status": "error",
+                "message": f"Failed to fetch images: {str(e)}"
             }, status=status.HTTP_500_INTERNAL_SERVER_ERROR)

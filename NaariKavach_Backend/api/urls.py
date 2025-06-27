@@ -12,4 +12,6 @@ urlpatterns = [
     path('assign-officer/', views.AssignOfficerView.as_view(), name='assign-officer'),
     path('resolve-sos/<int:sos_id>/', views.ResolveSOSView.as_view(), name='resolve-sos'),
     path('get-all-sos/', views.GetAllSOSView.as_view(), name='get-all-sos'),
+    path('upload-sos-images/', views.UploadSOSImagesView.as_view(), name='upload-sos-images'),
+    path('get-sos-images/<int:sos_id>/', views.GetSOSImagesView.as_view(), name='get-sos-images'),
 ]

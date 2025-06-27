@@ -207,6 +207,159 @@ Complete guide for testing the NaariKavach backend REST API and Socket.IO integr
     "updated_at": "2025-06-26T10:25:00.123456Z",
     "user": null
   }
+}
+```
+
+### 6. Get All SOS Requests (Public)
+
+**Endpoint:** `GET /api/get-all-sos/`  
+**Auth Required:** No  
+**Description:** Fetch all SOS entries from the database
+
+**Expected Response:**
+```json
+{
+  "status": "success",
+  "message": "SOS entries fetched successfully",
+  "count": 2,
+  "data": [
+    {
+      "id": 1,
+      "name": "Jane Doe",
+      "sos_type": 0,
+      "status_flag": 1,
+      "initial_latitude": 12.9716,
+      "initial_longitude": 77.5946,
+      "unit_number_dispatched": "UNIT001",
+      "acknowledged_flag": 1,
+      "room_id": "550e8400-e29b-41d4-a716-446655440000",
+      "created_at": "2025-06-26T10:15:30.123456Z",
+      "updated_at": "2025-06-26T10:25:00.123456Z",
+      "user": null,
+      "location_updates": [...],
+      "officer_assignments": [...],
+      "images": [...]
+    }
+  ]
+}
+```
+
+## 📷 Image Management Endpoints
+
+### 1. Upload Multiple Images for SOS
+
+**Endpoint:** `POST /api/upload-sos-images/`  
+**Auth Required:** No  
+**Content-Type:** `multipart/form-data`  
+**Description:** Upload multiple images associated with an SOS request
+
+**Form Data:**
+- `sos_id`: (required) The SOS ID to associate images with
+- `images`: (required) Multiple image files (can select multiple files)
+- `descriptions[]`: (optional) Array of descriptions for each image
+
+**Example using curl:**
+```bash
+curl -X POST http://localhost:8000/api/upload-sos-images/ \
+  -F "sos_id=1" \
+  -F "images=@/path/to/image1.jpg" \
+  -F "images=@/path/to/image2.jpg" \
+  -F "descriptions=Evidence photo" \
+  -F "descriptions=Location photo"
+```
+
+**Example using JavaScript FormData:**
+```javascript
+const formData = new FormData();
+formData.append('sos_id', '1');
+formData.append('images', imageFile1);
+formData.append('images', imageFile2);
+formData.append('descriptions', 'Evidence photo');
+formData.append('descriptions', 'Location photo');
+
+fetch('http://localhost:8000/api/upload-sos-images/', {
+  method: 'POST',
+  body: formData
+})
+```
+
+**Expected Response (Success):**
+```json
+{
+  "status": "success",
+  "message": "Successfully uploaded 2 image(s)",
+  "uploaded_images": [
+    {
+      "id": 1,
+      "sos_request": 1,
+      "image": "/media/sos_images/image1_abc123.jpg",
+      "image_url": "http://localhost:8000/media/sos_images/image1_abc123.jpg",
+      "description": "Evidence photo",
+      "uploaded_at": "2025-06-27T10:30:00.123456Z"
+    },
+    {
+      "id": 2,
+      "sos_request": 1,
+      "image": "/media/sos_images/image2_def456.jpg",
+      "image_url": "http://localhost:8000/media/sos_images/image2_def456.jpg",
+      "description": "Location photo",
+      "uploaded_at": "2025-06-27T10:30:01.123456Z"
+    }
+  ]
+}
+```
+
+**Expected Response (Error):**
+```json
+{
+  "status": "error",
+  "message": "SOS request not found"
+}
+```
+
+### 2. Get All Images for SOS
+
+**Endpoint:** `GET /api/get-sos-images/{sos_id}/`  
+**Auth Required:** No  
+**Description:** Retrieve all images associated with a specific SOS request
+
+**Example:** `GET /api/get-sos-images/1/`
+
+**Expected Response:**
+```json
+{
+  "status": "success",
+  "message": "Images fetched successfully",
+  "sos_id": 1,
+  "count": 2,
+  "images": [
+    {
+      "id": 2,
+      "sos_request": 1,
+      "image": "/media/sos_images/image2_def456.jpg",
+      "image_url": "http://localhost:8000/media/sos_images/image2_def456.jpg",
+      "description": "Location photo",
+      "uploaded_at": "2025-06-27T10:30:01.123456Z"
+    },
+    {
+      "id": 1,
+      "sos_request": 1,
+      "image": "/media/sos_images/image1_abc123.jpg",
+      "image_url": "http://localhost:8000/media/sos_images/image1_abc123.jpg",
+      "description": "Evidence photo",
+      "uploaded_at": "2025-06-27T10:30:00.123456Z"
+    }
+  ]
+}
+```
+
+**Testing Notes for Images:**
+- Images are ordered by upload time (newest first)
+- Supported formats: JPG, JPEG, PNG, GIF
+- Maximum file size depends on Django settings
+- Images are stored in `/media/sos_images/` directory
+- Each image gets a unique filename to prevent conflicts
+- Use `image_url` field for displaying images in frontend applications
 ## 🔌 Socket.IO Testing
 
 ### Connection and Basic Setup
@@ -361,6 +514,40 @@ curl -X POST http://localhost:8000/api/update-location/ \
 - **Error Handling:** Always listen for 'error' events for debugging
 
 ## 🧪 Quick Test Commands
+
+### Complete API Flow Test
+```bash
+# 1. Create SOS
+curl -X POST http://localhost:8000/api/create-sos/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "Test Emergency",
+    "sos_type": 0,
+    "initial_latitude": 12.9716,
+    "initial_longitude": 77.5946
+  }'
+
+# 2. Update location (use sos_id from step 1)
+curl -X POST http://localhost:8000/api/update-location/ \
+  -H "Content-Type: application/json" \
+  -d '{
+    "sos_request": 1,
+    "latitude": 12.9726,
+    "longitude": 77.5956
+  }'
+
+# 3. Upload images (use sos_id from step 1)
+curl -X POST http://localhost:8000/api/upload-sos-images/ \
+  -F "sos_id=1" \
+  -F "images=@/path/to/test-image.jpg" \
+  -F "descriptions=Test evidence photo"
+
+# 4. Get images for SOS
+curl -X GET http://localhost:8000/api/get-sos-images/1/
+
+# 5. Get all SOS requests
+curl -X GET http://localhost:8000/api/get-all-sos/
+```
 
 ### Browser Console Test
 ```javascript
@@ -536,6 +723,22 @@ socket.on('new_sos', data => console.log('New SOS:', data));
    - Send the request
    - Verify successful response
 
+8. **Upload Images to SOS**
+   - Create a POST request to `/api/upload-sos-images/`
+   - Set Content-Type to `multipart/form-data`
+   - Add form fields:
+     - `sos_id`: Use saved sos_id from step 1
+     - `images`: Select multiple image files
+     - `descriptions`: Add optional descriptions
+   - Send the request
+   - Verify successful upload response
+
+9. **Get SOS Images**
+   - Create a GET request to `/api/get-sos-images/{sos_id}/`
+   - Use saved sos_id from step 1
+   - Send the request
+   - Verify you receive all uploaded images with URLs
+
 ### 3. Error Cases Testing
 
 1. **Invalid SOS Creation**
@@ -550,6 +753,16 @@ socket.on('new_sos', data => console.log('New SOS:', data));
    - Try to access endpoints requiring authentication without a token
    - Verify you receive a 401 Unauthorized response
 
+4. **Invalid Image Upload**
+   - Create a POST request to `/api/upload-sos-images/` with missing sos_id
+   - Verify you receive a 400 Bad Request response
+   - Try uploading with non-existent sos_id
+   - Verify you receive a 404 Not Found response
+
+5. **Invalid Image Retrieval**
+   - Create a GET request to `/api/get-sos-images/{invalid_sos_id}/`
+   - Verify you receive a 404 Not Found response
+
 ## Running the Server
 To run the server for testing:
 
@@ -561,3 +774,14 @@ python manage.py runserver
 - The WebSocket connection will keep streaming location updates for a specific SOS.
 - Only authenticated users can mark an SOS as resolved or assign officers.
 - Anyone can create an SOS request and update locations, making it accessible in emergencies.
+- **Image Upload Features:**
+  - Multiple images can be uploaded for each SOS request
+  - Images are stored securely in the `/media/sos_images/` directory
+  - Each image can have an optional description
+  - Image URLs are provided for direct access to uploaded files
+  - Supported image formats: JPG, JPEG, PNG, GIF
+  - Images are automatically organized and named to prevent conflicts
+- **Database Changes:**
+  - Added `SOSImage` model to store image metadata
+  - Updated `SOS` serializer to include related images
+  - Images are linked to SOS requests via foreign key relationship

@@ -1,5 +1,5 @@
 from rest_framework import serializers
-from .models import SOS, OfficerAssignment, LocationUpdate
+from .models import SOS, OfficerAssignment, LocationUpdate, SOSImage
 from django.contrib.auth.models import User
 
 class UserSerializer(serializers.ModelSerializer):
@@ -17,9 +17,26 @@ class OfficerAssignmentSerializer(serializers.ModelSerializer):
         model = OfficerAssignment
         fields = '__all__'
 
+class SOSImageSerializer(serializers.ModelSerializer):
+    image_url = serializers.SerializerMethodField()
+    
+    class Meta:
+        model = SOSImage
+        fields = ('id', 'sos_request', 'image', 'image_url', 'description', 'uploaded_at')
+        read_only_fields = ('uploaded_at',)
+    
+    def get_image_url(self, obj):
+        if obj.image:
+            request = self.context.get('request')
+            if request:
+                return request.build_absolute_uri(obj.image.url)
+            return obj.image.url
+        return None
+
 class SOSSerializer(serializers.ModelSerializer):
     location_updates = LocationUpdateSerializer(many=True, read_only=True)
     officer_assignments = OfficerAssignmentSerializer(many=True, read_only=True)
+    images = SOSImageSerializer(many=True, read_only=True)
     
     class Meta:
         model = SOS
@@ -40,3 +57,8 @@ class OfficerAssignmentCreateSerializer(serializers.ModelSerializer):
     class Meta:
         model = OfficerAssignment
         fields = ('sos_request', 'officer_name', 'unit_number')
+
+class SOSImageCreateSerializer(serializers.ModelSerializer):
+    class Meta:
+        model = SOSImage
+        fields = ('sos_request', 'image', 'description')

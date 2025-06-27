@@ -1,5 +1,6 @@
 from django.db import models
 from django.contrib.auth.models import User
+import os
 
 class SOS(models.Model):
     # SOS types
@@ -56,3 +57,23 @@ class LocationUpdate(models.Model):
     
     def __str__(self):
         return f"Location Update for SOS {self.sos_request.id} at {self.timestamp}"
+
+class SOSImage(models.Model):
+    sos_request = models.ForeignKey(SOS, on_delete=models.CASCADE, related_name='images')
+    image = models.ImageField(upload_to='sos_images/')
+    description = models.CharField(max_length=255, blank=True, null=True)
+    uploaded_at = models.DateTimeField(auto_now_add=True)
+    
+    def __str__(self):
+        return f"Image for SOS {self.sos_request.id} - {self.image.name}"
+    
+    def delete(self, *args, **kwargs):
+        # Delete the image file when the model instance is deleted
+        if self.image:
+            if os.path.isfile(self.image.path):
+                os.remove(self.image.path)
+        super().delete(*args, **kwargs)
+
+    class Meta:
+        verbose_name = "SOS Image"
+        verbose_name_plural = "SOS Images"
