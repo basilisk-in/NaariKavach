@@ -64,6 +64,8 @@ export function Dashboard() {
   const [imagesLoading, setImagesLoading] = useState({}) // {sosId: boolean}
   const [currentImageIndex, setCurrentImageIndex] = useState({}) // {sosId: number}
   const [imageErrors, setImageErrors] = useState({}) // {sosId: string}
+  const [autoplayActive, setAutoplayActive] = useState({}) // {sosId: boolean}
+  const [autoplayIntervals, setAutoplayIntervals] = useState({}) // {sosId: intervalId}
 
   // Reusable function to fetch SOS data
   const fetchSOSData = async (isRefresh = false) => {
@@ -123,9 +125,17 @@ export function Dashboard() {
       
       // Clear images cache and re-fetch images for currently expanded SOS
       console.log('🗑️ Clearing images cache...')
+      
+      // Stop all autoplay intervals before clearing
+      Object.keys(autoplayIntervals).forEach(sosId => {
+        stopAutoplay(parseInt(sosId))
+      })
+      
       setSosImages({})
       setCurrentImageIndex({})
       setImageErrors({})
+      setAutoplayActive({})
+      setAutoplayIntervals({})
       
       // Re-fetch images for expanded SOS if any
       if (expandedRowId) {
@@ -307,6 +317,12 @@ export function Dashboard() {
       return () => {
         console.log('🧹 Cleaning up Socket.IO connections...')
         clearInterval(connectionCheckInterval)
+        
+        // Clean up all autoplay intervals
+        Object.values(autoplayIntervals).forEach(intervalId => {
+          if (intervalId) clearInterval(intervalId)
+        })
+        
         socketService.removeAllListeners()
         socketService.disconnect()
       }
@@ -486,6 +502,11 @@ export function Dashboard() {
     const images = sosImages[sosId] || []
     if (images.length <= 1) return
     
+    // Stop autoplay when user manually navigates
+    if (autoplayActive[sosId]) {
+      stopAutoplay(sosId)
+    }
+    
     setCurrentImageIndex(prev => {
       const currentIndex = prev[sosId] || 0
       const newIndex = currentIndex - 1
@@ -500,6 +521,11 @@ export function Dashboard() {
     const images = sosImages[sosId] || []
     if (images.length <= 1) return
     
+    // Stop autoplay when user manually navigates
+    if (autoplayActive[sosId]) {
+      stopAutoplay(sosId)
+    }
+    
     setCurrentImageIndex(prev => {
       const currentIndex = prev[sosId] || 0
       const newIndex = currentIndex + 1
@@ -508,6 +534,61 @@ export function Dashboard() {
         [sosId]: newIndex >= images.length ? 0 : newIndex
       }
     })
+  }
+
+  // Autoplay functionality
+  const startAutoplay = (sosId) => {
+    const images = sosImages[sosId] || []
+    if (images.length <= 1) return // Don't start autoplay for single or no images
+    
+    console.log(`▶️ Starting autoplay for SOS ${sosId}`)
+    
+    // Clear any existing interval
+    if (autoplayIntervals[sosId]) {
+      clearInterval(autoplayIntervals[sosId])
+    }
+    
+    // Start new interval
+    const intervalId = setInterval(() => {
+      setCurrentImageIndex(prev => {
+        const currentIndex = prev[sosId] || 0
+        const newIndex = currentIndex + 1
+        const nextIndex = newIndex >= images.length ? 0 : newIndex
+        return {
+          ...prev,
+          [sosId]: nextIndex
+        }
+      })
+    }, 500) // 0.5 second intervals
+    
+    // Store interval ID and mark as active
+    setAutoplayIntervals(prev => ({ ...prev, [sosId]: intervalId }))
+    setAutoplayActive(prev => ({ ...prev, [sosId]: true }))
+  }
+
+  const stopAutoplay = (sosId) => {
+    console.log(`⏹️ Stopping autoplay for SOS ${sosId}`)
+    
+    // Clear interval
+    if (autoplayIntervals[sosId]) {
+      clearInterval(autoplayIntervals[sosId])
+      setAutoplayIntervals(prev => {
+        const updated = { ...prev }
+        delete updated[sosId]
+        return updated
+      })
+    }
+    
+    // Mark as inactive
+    setAutoplayActive(prev => ({ ...prev, [sosId]: false }))
+  }
+
+  const toggleAutoplay = (sosId) => {
+    if (autoplayActive[sosId]) {
+      stopAutoplay(sosId)
+    } else {
+      startAutoplay(sosId)
+    }
   }
 
   // Officer assignment input handler
@@ -1104,38 +1185,64 @@ export function Dashboard() {
                                           <div className="mb-4">
                                             <div className="flex items-center justify-between mb-2">
                                               <h4 className="text-sm font-medium text-gray-700">Images</h4>
-                                              <button
-                                                onClick={(e) => {
-                                                  e.stopPropagation()
-                                                  // Clear images for this SOS and re-fetch
-                                                  setSosImages(prev => {
-                                                    const updated = {...prev}
-                                                    delete updated[sos.id]
-                                                    return updated
-                                                  })
-                                                  setCurrentImageIndex(prev => {
-                                                    const updated = {...prev}
-                                                    delete updated[sos.id]
-                                                    return updated
-                                                  })
-                                                  setImageErrors(prev => {
-                                                    const updated = {...prev}
-                                                    delete updated[sos.id]
-                                                    return updated
-                                                  })
-                                                  fetchSOSImages(sos.id, true)
-                                                }}
-                                                disabled={imagesLoading[sos.id]}
-                                                className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
-                                                  imagesLoading[sos.id]
-                                                    ? 'bg-gray-400 text-white cursor-not-allowed'
-                                                    : 'bg-blue-600 text-white hover:bg-blue-700'
-                                                }`}
-                                                title="Refresh images for this SOS"
-                                              >
-                                                <HiRefresh className={`w-3 h-3 ${imagesLoading[sos.id] ? 'animate-spin' : ''}`} />
-                                                {imagesLoading[sos.id] ? 'Loading...' : 'Refresh'}
-                                              </button>
+                                              <div className="flex items-center gap-2">
+                                                {/* Autoplay Button */}
+                                                {sosImages[sos.id] && sosImages[sos.id].length > 1 && (
+                                                  <button
+                                                    onClick={(e) => {
+                                                      e.stopPropagation()
+                                                      toggleAutoplay(sos.id)
+                                                    }}
+                                                    className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+                                                      autoplayActive[sos.id]
+                                                        ? 'bg-red-600 text-white hover:bg-red-700'
+                                                        : 'bg-green-600 text-white hover:bg-green-700'
+                                                    }`}
+                                                    title={autoplayActive[sos.id] ? 'Stop autoplay' : 'Start autoplay (0.5s intervals)'}
+                                                  >
+                                                    <HiPlay className={`w-3 h-3 ${autoplayActive[sos.id] ? 'animate-pulse' : ''}`} />
+                                                    {autoplayActive[sos.id] ? 'Stop' : 'Loop'}
+                                                  </button>
+                                                )}
+                                                
+                                                {/* Refresh Button */}
+                                                <button
+                                                  onClick={(e) => {
+                                                    e.stopPropagation()
+                                                    // Stop autoplay if active
+                                                    if (autoplayActive[sos.id]) {
+                                                      stopAutoplay(sos.id)
+                                                    }
+                                                    // Clear images for this SOS and re-fetch
+                                                    setSosImages(prev => {
+                                                      const updated = {...prev}
+                                                      delete updated[sos.id]
+                                                      return updated
+                                                    })
+                                                    setCurrentImageIndex(prev => {
+                                                      const updated = {...prev}
+                                                      delete updated[sos.id]
+                                                      return updated
+                                                    })
+                                                    setImageErrors(prev => {
+                                                      const updated = {...prev}
+                                                      delete updated[sos.id]
+                                                      return updated
+                                                    })
+                                                    fetchSOSImages(sos.id, true)
+                                                  }}
+                                                  disabled={imagesLoading[sos.id]}
+                                                  className={`flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors ${
+                                                    imagesLoading[sos.id]
+                                                      ? 'bg-gray-400 text-white cursor-not-allowed'
+                                                      : 'bg-blue-600 text-white hover:bg-blue-700'
+                                                  }`}
+                                                  title="Refresh images for this SOS"
+                                                >
+                                                  <HiRefresh className={`w-3 h-3 ${imagesLoading[sos.id] ? 'animate-spin' : ''}`} />
+                                                  {imagesLoading[sos.id] ? 'Loading...' : 'Refresh'}
+                                                </button>
+                                              </div>
                                             </div>
                                             <div className="bg-white p-3 rounded border">
                                               {imagesLoading[sos.id] ? (
@@ -1172,44 +1279,18 @@ export function Dashboard() {
                                                   
                                                   return (
                                                     <div className="space-y-3">
-                                                      {/* Image Display */}
-                                                      <div className="relative">
-                                                        <img
-                                                          src={currentImage.image_url}
-                                                          alt={currentImage.description || `SOS Evidence ${currentIndex + 1}`}
-                                                          className="w-full max-w-md h-48 object-cover rounded border mx-auto block"
-                                                          onError={(e) => {
-                                                            e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyOEMyNC40MTgzIDI4IDI4IDI0LjQxODMgMjggMjBDMjggMTUuNTgxNyAyNC40MTgzIDEyIDIwIDEyQzE1LjU4MTcgMTIgMTIgMTUuNTgxNyAxMiAyMEMxMiAyNC40MTgzIDE1LjU4MTcgMjggMjAgMjhaIiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIvPgo8L3N2Zz4K'
-                                                            e.target.alt = 'Failed to load image'
-                                                          }}
-                                                        />
-                                                        
-                                                        {/* Navigation arrows overlay (only show if multiple images) */}
-                                                        {images.length > 1 && (
-                                                          <>
-                                                            <button
-                                                              onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                handlePreviousImage(sos.id)
-                                                              }}
-                                                              className="absolute left-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-opacity"
-                                                              title="Previous image"
-                                                            >
-                                                              <HiChevronLeft className="w-4 h-4" />
-                                                            </button>
-                                                            <button
-                                                              onClick={(e) => {
-                                                                e.stopPropagation()
-                                                                handleNextImage(sos.id)
-                                                              }}
-                                                              className="absolute right-2 top-1/2 transform -translate-y-1/2 bg-black bg-opacity-50 text-white p-2 rounded-full hover:bg-opacity-70 transition-opacity"
-                                                              title="Next image"
-                                                            >
-                                                              <HiChevronRight className="w-4 h-4" />
-                                                            </button>
-                                                          </>
-                                                        )}
-                                                      </div>
+                                                                                                             {/* Image Display */}
+                                                       <div className="relative">
+                                                         <img
+                                                           src={currentImage.image_url}
+                                                           alt={currentImage.description || `SOS Evidence ${currentIndex + 1}`}
+                                                           className="w-full max-w-2xl h-80 object-cover rounded border mx-auto block"
+                                                           onError={(e) => {
+                                                             e.target.src = 'data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iNDAiIGhlaWdodD0iNDAiIHZpZXdCb3g9IjAgMCA0MCA0MCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHJlY3Qgd2lkdGg9IjQwIiBoZWlnaHQ9IjQwIiBmaWxsPSIjRjNGNEY2Ii8+CjxwYXRoIGQ9Ik0yMCAyOEMyNC40MTgzIDI4IDI4IDI0LjQxODMgMjggMjBDMjggMTUuNTgxNyAyNC40MTgzIDEyIDIwIDEyQzE1LjU4MTcgMTIgMTIgMTUuNTgxNyAxMiAyMEMxMiAyNC40MTgzIDE1LjU4MTcgMjggMjAgMjhaIiBzdHJva2U9IiM5Q0EzQUYiIHN0cm9rZS13aWR0aD0iMiIvPgo8L3N2Zz4K'
+                                                             e.target.alt = 'Failed to load image'
+                                                           }}
+                                                         />
+                                                       </div>
                                                       
                                                       {/* Image Info */}
                                                       <div className="text-center space-y-1">
