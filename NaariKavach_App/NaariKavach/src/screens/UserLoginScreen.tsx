@@ -5,7 +5,6 @@ import { StackNavigationProp } from '@react-navigation/stack';
 import { RootStackParamList } from '../navigation/AppNavigator';
 import { commonStyles, colors, spacing, borderRadius } from '../styles/commonStyles';
 import { useAuth } from '../contexts/AuthContext';
-import api from '../services/services';
 
 type UserLoginScreenNavigationProp = StackNavigationProp<RootStackParamList, 'UserLogin'>;
 
@@ -14,7 +13,7 @@ interface Props {
 }
 
 export default function UserLoginScreen({ navigation }: Props): React.JSX.Element {
-  const [email, setEmail] = useState<string>('');
+  const [username, setUsername] = useState<string>('');
   const [password, setPassword] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const { isAuthenticated, login } = useAuth();
@@ -26,19 +25,15 @@ export default function UserLoginScreen({ navigation }: Props): React.JSX.Elemen
   }
 
   const handleLogin = async (): Promise<void> => {
-    if (!email || !password) {
+    if (!username || !password) {
       Alert.alert('Error', 'Please fill in all fields');
       return;
     }
 
     try {
       setIsLoading(true);
-      const res = await login(email, password);
-      if (res) {
-        // Navigation is handled automatically by AuthContext state change
-        // The AppNavigator will redirect to UserTabs when isAuthenticated becomes true
-        console.log("IS AUTHENTICATED", isAuthenticated);
-      } 
+      await login(username, password);
+      Alert.alert('Success', 'Login successful');
       // navigation.navigate("UserTabs");
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Login failed');
@@ -67,8 +62,8 @@ export default function UserLoginScreen({ navigation }: Props): React.JSX.Elemen
             <TextInput
               style={commonStyles.input}
               placeholder="Username"
-              value={email}
-              onChangeText={setEmail}
+              value={username}
+              onChangeText={setUsername}
               keyboardType="email-address"
               autoCapitalize="none"
             />
