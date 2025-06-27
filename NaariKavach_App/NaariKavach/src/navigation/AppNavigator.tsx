@@ -22,9 +22,6 @@ import PoliceAlertsScreen from '../screens/PoliceAlertsScreen';
 import EmergencyContactsScreen from '../screens/EmergencyContactsScreen';
 import AddEmergencyContactScreen from '../screens/AddEmergencyContactScreen';
 import PersonalInformationScreen from '../screens/PersonalInformationScreen';
-import SafetySettingsScreen from '../screens/SafetySettingsScreen';
-import NotificationsScreen from '../screens/NotificationsScreen';
-import PrivacySecurityScreen from '../screens/PrivacySecurityScreen';
 import HelpSupportScreen from '../screens/HelpSupportScreen';
 
 // Navigation types
@@ -176,6 +173,8 @@ export default function AppNavigator(): React.JSX.Element {
             <Stack.Screen name="UserLogin" component={UserLoginScreen} />
             <Stack.Screen name="PoliceLogin" component={PoliceLoginScreen} />
             <Stack.Screen name="SignUp" component={SignUpScreen} />
+            {/* Allow UserTabs access for guest users */}
+            <Stack.Screen name="UserTabs" component={UserTabNavigator} />
           </>
         ) : (
           // Main App Stack - when user is logged in
@@ -185,9 +184,6 @@ export default function AppNavigator(): React.JSX.Element {
             <Stack.Screen name="EmergencyContacts" component={EmergencyContactsScreen} />
             <Stack.Screen name="AddEmergencyContact" component={AddEmergencyContactScreen} />
             <Stack.Screen name="PersonalInformation" component={PersonalInformationScreen} />
-            <Stack.Screen name="SafetySettings" component={SafetySettingsScreen} />
-            <Stack.Screen name="Notifications" component={NotificationsScreen} />
-            <Stack.Screen name="PrivacySecurity" component={PrivacySecurityScreen} />
             <Stack.Screen name="HelpSupport" component={HelpSupportScreen} />
           </>
         )}

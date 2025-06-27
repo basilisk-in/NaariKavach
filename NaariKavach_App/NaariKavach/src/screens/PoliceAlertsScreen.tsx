@@ -38,40 +38,24 @@ export default function PoliceAlertsScreen({ navigation, route }: Props): React.
   const { unitId } = route.params || { unitId: 'Unknown' };
   
   const [sosAlerts, setSOSAlerts] = useState<SOSAlert[]>([]);
+  const [assignedSOS, setAssignedSOS] = useState<SOSAlert[]>([]);
   const [isLoading, setIsLoading] = useState<boolean>(true);
   const [refreshing, setRefreshing] = useState<boolean>(false);
-  
-  // Mock SOS alert data - replace with actual API call
-  const mockSOSAlerts: SOSAlert[] = [
-    {
-      sos_id: 'SOS-001',
-      latitude: 28.6139,
-      longitude: 77.2090,
-      timestamp: new Date(Date.now() - 1000 * 60 * 15).toISOString(), // 15 minutes ago
-      status: 'active',
-      priority: 'high',
-    },
-    {
-      sos_id: 'SOS-002',
-      latitude: 28.7041,
-      longitude: 77.1025,
-      timestamp: new Date(Date.now() - 1000 * 60 * 30).toISOString(), // 30 minutes ago
-      status: 'assigned',
-      priority: 'medium',
-    },
-    {
-      sos_id: 'SOS-003',
-      latitude: 28.5355,
-      longitude: 77.3910,
-      timestamp: new Date(Date.now() - 1000 * 60 * 45).toISOString(), // 45 minutes ago
-      status: 'pending',
-      priority: 'high',
-    },
-  ];
 
   useEffect(() => {
     fetchSOSAlerts();
+    loadAssignedSOS();
   }, []);
+
+  // Add focus listener to refresh data when user returns to this screen
+  useEffect(() => {
+    const unsubscribe = navigation.addListener('focus', () => {
+      fetchSOSAlerts();
+      loadAssignedSOS();
+    });
+
+    return unsubscribe;
+  }, [navigation]);
 
   const fetchSOSAlerts = async (): Promise<void> => {
     setIsLoading(true);
@@ -84,7 +68,7 @@ export default function PoliceAlertsScreen({ navigation, route }: Props): React.
       
       // For now, use mock data with a delay to simulate API call
       setTimeout(() => {
-        setSOSAlerts(mockSOSAlerts);
+        setSOSAlerts([]);
         setIsLoading(false);
       }, 1000);
     } catch (error) {
@@ -94,28 +78,99 @@ export default function PoliceAlertsScreen({ navigation, route }: Props): React.
     }
   };
 
+  const loadAssignedSOS = async (): Promise<void> => {
+    try {
+      const storedAssignedSOS = await AsyncStorage.getItem(`assigned_sos_${unitId}`);
+      if (storedAssignedSOS) {
+        const assignedSOSData: SOSAlert[] = JSON.parse(storedAssignedSOS);
+        setAssignedSOS(assignedSOSData);
+      }
+    } catch (error) {
+      console.error('Error loading assigned SOS:', error);
+    }
+  };
+
+  const storeAssignedSOS = async (sos: SOSAlert): Promise<void> => {
+    try {
+      const existingAssigned = await AsyncStorage.getItem(`assigned_sos_${unitId}`);
+      const assignedSOSList: SOSAlert[] = existingAssigned ? JSON.parse(existingAssigned) : [];
+      
+      // Check if SOS is already assigned
+      const alreadyAssigned = assignedSOSList.find(item => item.sos_id === sos.sos_id);
+      if (!alreadyAssigned) {
+        const updatedSOS = [...assignedSOSList, { ...sos, status: 'assigned' as const }];
+        await AsyncStorage.setItem(`assigned_sos_${unitId}`, JSON.stringify(updatedSOS));
+        setAssignedSOS(updatedSOS);
+      }
+    } catch (error) {
+      console.error('Error storing assigned SOS:', error);
+    }
+  };
+
+  const removeAssignedSOS = async (sosId: string): Promise<void> => {
+    try {
+      const existingAssigned = await AsyncStorage.getItem(`assigned_sos_${unitId}`);
+      if (existingAssigned) {
+        const assignedSOSList: SOSAlert[] = JSON.parse(existingAssigned);
+        const updatedList = assignedSOSList.filter(item => item.sos_id !== sosId);
+        await AsyncStorage.setItem(`assigned_sos_${unitId}`, JSON.stringify(updatedList));
+        setAssignedSOS(updatedList);
+      }
+    } catch (error) {
+      console.error('Error removing assigned SOS:', error);
+    }
+  };
+
   const refreshAlerts = async (): Promise<void> => {
     setRefreshing(true);
     await fetchSOSAlerts();
+    await loadAssignedSOS(); // Also reload assigned SOS
     setRefreshing(false);
   };
 
   const handleSOSPress = (alert: SOSAlert): void => {
     const timeAgo = getTimeAgo(alert.timestamp);
+    const isAssigned = assignedSOS.some(item => item.sos_id === alert.sos_id);
     
-    Alert.alert(
-      `SOS Alert - ${alert.sos_id}`,
-      `Time: ${timeAgo}\nStatus: ${alert.status.toUpperCase()}\nPriority: ${alert.priority?.toUpperCase() || 'NORMAL'}\n${alert.latitude && alert.longitude ? `Location: ${alert.latitude.toFixed(4)}, ${alert.longitude.toFixed(4)}` : 'Location: Not available'}`,
-      [
-        { text: 'Cancel', style: 'cancel' },
-        { text: 'View Details', onPress: () => handleViewDetails(alert) },
-        { 
-          text: 'Resolve', 
-          style: 'destructive',
-          onPress: () => handleResolveSOS(alert)
-        },
-      ]
-    );
+    if (isAssigned) {
+      Alert.alert(
+        `SOS Alert - ${alert.sos_id}`,
+        `Time: ${timeAgo}\nStatus: ${alert.status.toUpperCase()}\nPriority: ${alert.priority?.toUpperCase() || 'NORMAL'}\n${alert.latitude && alert.longitude ? `Location: ${alert.latitude.toFixed(4)}, ${alert.longitude.toFixed(4)}` : 'Location: Not available'}\n\n⚠️ This SOS is assigned to your unit`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'View Details', onPress: () => handleViewDetails(alert) },
+          { 
+            text: 'Resolve', 
+            style: 'destructive',
+            onPress: () => handleResolveSOS(alert)
+          },
+        ]
+      );
+    } else {
+      Alert.alert(
+        `SOS Alert - ${alert.sos_id}`,
+        `Time: ${timeAgo}\nStatus: ${alert.status.toUpperCase()}\nPriority: ${alert.priority?.toUpperCase() || 'NORMAL'}\n${alert.latitude && alert.longitude ? `Location: ${alert.latitude.toFixed(4)}, ${alert.longitude.toFixed(4)}` : 'Location: Not available'}`,
+        [
+          { text: 'Cancel', style: 'cancel' },
+          { text: 'View Details', onPress: () => handleViewDetails(alert) },
+          { 
+            text: 'Accept Assignment', 
+            onPress: () => handleAcceptAssignment(alert)
+          },
+        ]
+      );
+    }
+  };
+
+  const handleAcceptAssignment = async (alert: SOSAlert): Promise<void> => {
+    try {
+      // Store the SOS as assigned
+      await storeAssignedSOS(alert);
+      Alert.alert('Assignment Accepted', `SOS ${alert.sos_id} has been assigned to Unit ${unitId}`);
+    } catch (error) {
+      console.error('Error accepting assignment:', error);
+      Alert.alert('Error', 'Failed to accept assignment. Please try again.');
+    }
   };
 
   const handleViewDetails = (alert: SOSAlert): void => {
@@ -131,7 +186,7 @@ export default function PoliceAlertsScreen({ navigation, route }: Props): React.
       setIsLoading(true);
       
       // Call the resolve SOS service
-      const response = await sosApi.resolveSOS(parseInt(alert.sos_id.replace('SOS-', '')));
+      const response = await sosApi.resolveSOS(parseInt(alert.sos_id));
       
       if (response.success) {
         // Create resolved SOS object for storage
@@ -146,6 +201,9 @@ export default function PoliceAlertsScreen({ navigation, route }: Props): React.
         
         // Store in AsyncStorage for recent history
         await storeResolvedSOS(resolvedSOS);
+        
+        // Remove from assigned SOS storage
+        await removeAssignedSOS(alert.sos_id);
         
         // Remove from current alerts
         setSOSAlerts(prev => prev.filter(item => item.sos_id !== alert.sos_id));
@@ -251,7 +309,7 @@ export default function PoliceAlertsScreen({ navigation, route }: Props): React.
             <Ionicons name="arrow-back" size={24} color={colors.darkGray} />
           </TouchableOpacity>
           <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Active SOS Alerts</Text>
+            <Text style={styles.headerTitle}>SOS Alerts</Text>
             <Text style={styles.unitIdText}>Unit: {unitId}</Text>
           </View>
           <TouchableOpacity style={styles.refreshButton} onPress={refreshAlerts} disabled={refreshing}>
@@ -270,50 +328,109 @@ export default function PoliceAlertsScreen({ navigation, route }: Props): React.
           </View>
         ) : (
           <ScrollView style={styles.alertsList} showsVerticalScrollIndicator={false}>
-            {sosAlerts.length === 0 ? (
-              <View style={styles.emptyContainer}>
-                <Ionicons name="shield-checkmark-outline" size={64} color={colors.gray} />
-                <Text style={styles.emptyTitle}>No Active SOS Alerts</Text>
-                <Text style={styles.emptySubtitle}>All clear! No emergency alerts at this time.</Text>
-              </View>
-            ) : (
-              sosAlerts.map((alert) => (
-                <TouchableOpacity
-                  key={alert.sos_id}
-                  style={styles.alertCard}
-                  onPress={() => handleSOSPress(alert)}
-                >
-                  <View style={styles.alertHeader}>
-                    <View style={styles.alertInfo}>
-                      <Ionicons
-                        name={getStatusIcon(alert.status)}
-                        size={24}
-                        color={getStatusColor(alert.status)}
-                      />
-                      <View style={styles.alertTextContainer}>
-                        <Text style={styles.alertId}>{alert.sos_id}</Text>
-                        <Text style={styles.alertTime}>{getTimeAgo(alert.timestamp)}</Text>
-                      </View>
-                    </View>
-                    <View style={styles.badgeContainer}>
-                      {alert.priority && (
-                        <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(alert.priority) }]}>
-                          <Text style={styles.priorityText}>{alert.priority.toUpperCase()}</Text>
+            {/* Assigned SOS Section */}
+            {assignedSOS.length > 0 && (
+              <View style={styles.sectionContainer}>
+                <View style={styles.sectionHeader}>
+                  <Ionicons name="shield" size={20} color={colors.darkGray} />
+                  <Text style={styles.sectionTitle}>Your Assigned SOS ({assignedSOS.length})</Text>
+                </View>
+                {assignedSOS.map((alert) => (
+                  <TouchableOpacity
+                    key={`assigned-${alert.sos_id}`}
+                    style={[styles.alertCard, styles.assignedCard]}
+                    onPress={() => handleSOSPress(alert)}
+                  >
+                    <View style={styles.alertHeader}>
+                      <View style={styles.alertInfo}>
+                        <Ionicons
+                          name={getStatusIcon(alert.status)}
+                          size={24}
+                          color={getStatusColor(alert.status)}
+                        />
+                        <View style={styles.alertTextContainer}>
+                          <Text style={styles.alertId}>{alert.sos_id}</Text>
+                          <Text style={styles.alertTime}>{getTimeAgo(alert.timestamp)}</Text>
                         </View>
-                      )}
-                      <View style={[styles.statusBadge, { backgroundColor: getStatusColor(alert.status) }]}>
-                        <Text style={styles.statusText}>{alert.status.toUpperCase()}</Text>
+                      </View>
+                      <View style={styles.badgeContainer}>
+                        {alert.priority && (
+                          <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(alert.priority) }]}>
+                            <Text style={styles.priorityText}>{alert.priority.toUpperCase()}</Text>
+                          </View>
+                        )}
+                        <View style={[styles.statusBadge, { backgroundColor: getStatusColor(alert.status) }]}>
+                          <Text style={styles.statusText}>{alert.status.toUpperCase()}</Text>
+                        </View>
                       </View>
                     </View>
-                  </View>
-                  {alert.latitude && alert.longitude && (
-                    <Text style={styles.alertLocation}>
-                      📍 {alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)}
-                    </Text>
-                  )}
-                </TouchableOpacity>
-              ))
+                    {alert.latitude && alert.longitude && (
+                      <Text style={styles.alertLocation}>
+                        📍 {alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)}
+                      </Text>
+                    )}
+                  </TouchableOpacity>
+                ))}
+              </View>
             )}
+
+            {/* All SOS Alerts Section */}
+            <View style={styles.sectionContainer}>
+              <View style={styles.sectionHeader}>
+                <Ionicons name="alert-circle-outline" size={20} color={colors.darkGray} />
+                <Text style={styles.sectionTitle}>All Active SOS Alerts ({sosAlerts.length})</Text>
+              </View>
+              {sosAlerts.length === 0 ? (
+                <View style={styles.emptyContainer}>
+                  <Ionicons name="shield-checkmark-outline" size={64} color={colors.gray} />
+                  <Text style={styles.emptyTitle}>No Active SOS Alerts</Text>
+                  <Text style={styles.emptySubtitle}>All clear! No emergency alerts at this time.</Text>
+                </View>
+              ) : (
+                sosAlerts.map((alert) => {
+                  const isAssigned = assignedSOS.some(item => item.sos_id === alert.sos_id);
+                  return (
+                    <TouchableOpacity
+                      key={alert.sos_id}
+                      style={[styles.alertCard, isAssigned && styles.assignedIndicator]}
+                      onPress={() => handleSOSPress(alert)}
+                    >
+                      <View style={styles.alertHeader}>
+                        <View style={styles.alertInfo}>
+                          <Ionicons
+                            name={getStatusIcon(alert.status)}
+                            size={24}
+                            color={getStatusColor(alert.status)}
+                          />
+                          <View style={styles.alertTextContainer}>
+                            <Text style={styles.alertId}>
+                              {alert.sos_id}
+                              {isAssigned && <Text style={styles.assignedText}> (Assigned to you)</Text>}
+                            </Text>
+                            <Text style={styles.alertTime}>{getTimeAgo(alert.timestamp)}</Text>
+                          </View>
+                        </View>
+                        <View style={styles.badgeContainer}>
+                          {alert.priority && (
+                            <View style={[styles.priorityBadge, { backgroundColor: getPriorityColor(alert.priority) }]}>
+                              <Text style={styles.priorityText}>{alert.priority.toUpperCase()}</Text>
+                            </View>
+                          )}
+                          <View style={[styles.statusBadge, { backgroundColor: getStatusColor(alert.status) }]}>
+                            <Text style={styles.statusText}>{alert.status.toUpperCase()}</Text>
+                          </View>
+                        </View>
+                      </View>
+                      {alert.latitude && alert.longitude && (
+                        <Text style={styles.alertLocation}>
+                          📍 {alert.latitude.toFixed(4)}, {alert.longitude.toFixed(4)}
+                        </Text>
+                      )}
+                    </TouchableOpacity>
+                  );
+                })
+              )}
+            </View>
           </ScrollView>
         )}
       </View>
@@ -462,5 +579,35 @@ const styles = StyleSheet.create({
     color: colors.white,
     fontSize: 12,
     fontWeight: '600',
+  },
+  sectionContainer: {
+    marginBottom: spacing.lg,
+  },
+  sectionHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+    paddingVertical: spacing.md,
+    backgroundColor: colors.lightGray,
+    marginBottom: spacing.sm,
+  },
+  sectionTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: colors.darkGray,
+    marginLeft: spacing.sm,
+  },
+  assignedCard: {
+    borderLeftColor: '#28A745',
+    backgroundColor: '#f8fff9',
+  },
+  assignedIndicator: {
+    borderLeftColor: '#28A745',
+    backgroundColor: '#f8fff9',
+  },
+  assignedText: {
+    color: '#28A745',
+    fontSize: 12,
+    fontWeight: '500',
   },
 });
