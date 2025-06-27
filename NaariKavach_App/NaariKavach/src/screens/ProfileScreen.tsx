@@ -99,7 +99,6 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
 
             <TouchableOpacity 
               style={styles.optionItem}
-              onPress={() => navigation.navigate('SafetySettings')}
             >
               <View style={styles.optionIcon}>
                 <Ionicons name="shield-outline" size={24} color={colors.darkGray} />
@@ -110,7 +109,6 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
 
             <TouchableOpacity 
               style={styles.optionItem}
-              onPress={() => navigation.navigate('Notifications')}
             >
               <View style={styles.optionIcon}>
                 <Ionicons name="notifications-outline" size={24} color={colors.darkGray} />
@@ -121,7 +119,6 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
 
             <TouchableOpacity 
               style={styles.optionItem}
-              onPress={() => navigation.navigate('PrivacySecurity')}
             >
               <View style={styles.optionIcon}>
                 <Ionicons name="lock-closed-outline" size={24} color={colors.darkGray} />

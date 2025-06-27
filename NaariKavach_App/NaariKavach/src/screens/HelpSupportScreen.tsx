@@ -13,7 +13,7 @@ interface Props {
 
 export default function HelpSupportScreen({ navigation }: Props): React.JSX.Element {
   const handleContactSupport = async () => {
-    const email = 'support@naarikavach.com';
+    const email = 'dev.basilisk@gmail.com';
     const subject = 'Support Request - NaariKavach App';
     const body = 'Please describe your issue or question:\n\n';
     
@@ -39,31 +39,8 @@ export default function HelpSupportScreen({ navigation }: Props): React.JSX.Elem
     }
   };
 
-  const handleCallHelpline = async () => {
-    const phoneNumber = 'tel:+911234567890';
-    
-    try {
-      const canOpen = await Linking.canOpenURL(phoneNumber);
-      if (canOpen) {
-        await Linking.openURL(phoneNumber);
-      } else {
-        Alert.alert(
-          'Phone Not Available',
-          'Please call our helpline at: +91 123 456 7890',
-          [{ text: 'OK' }]
-        );
-      }
-    } catch (error) {
-      Alert.alert(
-        'Error',
-        'Please call our helpline at: +91 123 456 7890',
-        [{ text: 'OK' }]
-      );
-    }
-  };
-
   const handleOpenWebsite = async () => {
-    const websiteUrl = 'https://naarikavach.com/help';
+    const websiteUrl = 'https://github.com/basilisk-in/NaariKavach';
     
     try {
       const canOpen = await Linking.canOpenURL(websiteUrl);
@@ -72,14 +49,14 @@ export default function HelpSupportScreen({ navigation }: Props): React.JSX.Elem
       } else {
         Alert.alert(
           'Cannot Open Website',
-          'Please visit: https://naarikavach.com/help',
+          'Please visit: https://github.com/basilisk-in/NaariKavach',
           [{ text: 'OK' }]
         );
       }
     } catch (error) {
       Alert.alert(
         'Error',
-        'Please visit: https://naarikavach.com/help',
+        'Please visit: https://github.com/basilisk-in/NaariKavach',
         [{ text: 'OK' }]
       );
     }
@@ -153,13 +130,6 @@ export default function HelpSupportScreen({ navigation }: Props): React.JSX.Elem
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           <View style={styles.section}>
             <Text style={styles.sectionTitle}>Get Help</Text>
-            
-            <HelpItem
-              title="Emergency Helpline"
-              description="24/7 emergency support hotline"
-              onPress={handleCallHelpline}
-              icon="call"
-            />
             
             <HelpItem
               title="Contact Support"

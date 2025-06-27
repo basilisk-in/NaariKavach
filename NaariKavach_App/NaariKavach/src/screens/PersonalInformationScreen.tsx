@@ -145,7 +145,7 @@ export default function PersonalInformationScreen({ navigation }: Props): React.
                     style={[styles.input, !isEditing && styles.inputReadonly]}
                     value={formData.fullName}
                     onChangeText={(text) => setFormData({...formData, fullName: text})}
-                    editable={isEditing}
+                    editable={false}
                     placeholder="Enter your full name"
                   />
                 </View>
@@ -156,7 +156,7 @@ export default function PersonalInformationScreen({ navigation }: Props): React.
                     style={[styles.input, !isEditing && styles.inputReadonly]}
                     value={formData.email}
                     onChangeText={(text) => setFormData({...formData, email: text})}
-                    editable={isEditing}
+                    editable={false}
                     placeholder="Enter your email"
                     keyboardType="email-address"
                     autoCapitalize="none"
