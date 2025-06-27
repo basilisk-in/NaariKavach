@@ -95,6 +95,12 @@ export default function UserLoginScreen({ navigation }: Props): React.JSX.Elemen
         </View>
 
         <View style={styles.footer}>
+          <TouchableOpacity onPress={() => navigation.navigate('UserTabs')}>
+            <Text style={styles.signUpText}>Login as Guest</Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.footer}>
           <TouchableOpacity onPress={() => navigation.navigate('SignUp')}>
             <Text style={styles.signUpText}>Don't have an account? Sign Up</Text>
           </TouchableOpacity>

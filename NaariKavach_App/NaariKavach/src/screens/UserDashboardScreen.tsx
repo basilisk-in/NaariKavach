@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert, Linking } from 'react-native';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert, Linking, TextInput, Modal } from 'react-native';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
 import { CompositeNavigationProp } from '@react-navigation/native';
@@ -38,8 +39,112 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
   const [isUsingWebSocket, setIsUsingWebSocket] = useState(false);
   const socketRef = useRef<Socket | null>(null);
   
-  // Hardcoded WebSocket server IP - replace with your actual IP
-  const WEBSOCKET_SERVER_URL = 'http://192.168.137.1:8002';
+  // WebSocket server IP configuration
+  const [webSocketIP, setWebSocketIP] = useState('192.168.137.1:8002');
+  const [inputWebSocketIP, setInputWebSocketIP] = useState('192.168.137.1:8002');
+  const [showIPModal, setShowIPModal] = useState(false);
+  
+  // Dynamic WebSocket server URL based on current IP
+  const getWebSocketServerURL = () => `http://${webSocketIP}`;
+
+  // Load WebSocket IP from AsyncStorage
+  const loadWebSocketIP = async (): Promise<void> => {
+    try {
+      const savedIP = await AsyncStorage.getItem('webSocketIP');
+      if (savedIP) {
+        setWebSocketIP(savedIP);
+        setInputWebSocketIP(savedIP);
+      }
+    } catch (error) {
+      console.error('Error loading WebSocket IP from storage:', error);
+    }
+  };
+
+  // Save WebSocket IP to AsyncStorage
+  const saveWebSocketIP = async (ip: string): Promise<void> => {
+    try {
+      await AsyncStorage.setItem('webSocketIP', ip);
+      const previousIP = webSocketIP;
+      setWebSocketIP(ip);
+      
+      // Disconnect existing WebSocket if connected
+      if (socketRef.current) {
+        console.log('🔄 Disconnecting from previous WebSocket:', previousIP);
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+      
+      // Reconnect with new IP after a short delay
+      setTimeout(() => {
+        console.log('🔌 Connecting to new WebSocket IP:', ip);
+        initializeWebSocket();
+      }, 1000);
+      
+      Toast.show({
+        type: 'success',
+        text1: 'WebSocket IP Updated',
+        text2: `Reconnecting to: ${ip}`,
+        position: 'bottom',
+        visibilityTime: 3000,
+      });
+    } catch (error) {
+      console.error('Error saving WebSocket IP to storage:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'Error',
+        text2: 'Failed to save WebSocket IP',
+        position: 'bottom',
+      });
+    }
+  };
+
+  // Handle WebSocket IP update
+  const handleUpdateWebSocketIP = (): void => {
+    const trimmedIP = inputWebSocketIP.trim();
+    
+    if (!trimmedIP) {
+      Toast.show({
+        type: 'error',
+        text1: 'Invalid IP',
+        text2: 'Please enter a valid IP address and port',
+        position: 'bottom',
+      });
+      return;
+    }
+
+    // Check if the IP is different from current
+    if (trimmedIP === webSocketIP) {
+      Toast.show({
+        type: 'info',
+        text1: 'No Change',
+        text2: 'This IP is already configured',
+        position: 'bottom',
+      });
+      setShowIPModal(false);
+      return;
+    }
+
+    // Show confirmation before changing IP
+    Alert.alert(
+      'Update WebSocket IP',
+      `Change WebSocket server from:\n${webSocketIP}\n\nTo:\n${trimmedIP}\n\nThis will disconnect and reconnect the WebSocket connection.`,
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Update',
+          onPress: () => {
+            saveWebSocketIP(trimmedIP);
+            setShowIPModal(false);
+          }
+        }
+      ]
+    );
+  };
+
+  // Load WebSocket IP from storage on mount
+  useEffect(() => {
+    loadWebSocketIP();
+  }, []);
 
   // Get current location on component mount
   useEffect(() => {
@@ -183,9 +288,10 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
   // Initialize WebSocket connection
   const initializeWebSocket = (): void => {
     try {
-      console.log('🔌 Initializing WebSocket connection to:', WEBSOCKET_SERVER_URL);
+      const serverURL = getWebSocketServerURL();
+      console.log('🔌 Initializing WebSocket connection to:', serverURL);
       
-      const socket = io(WEBSOCKET_SERVER_URL, {
+      const socket = io(serverURL, {
         transports: ['websocket'],
         timeout: 10000,
         reconnection: true,
@@ -462,28 +568,19 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
           if (hasInternetConnection && !isUsingWebSocket) {
             // Use normal API call
             const response = await api.auth.getCurrentUser();
-            if (response.success && response.data?.username) {
-              const res = await api.sos.createSOS(response.data?.username, 0, latitude, longitude);
-              console.log('SOS created:', res);
-              if (res.success && res.data?.sos_id) {
-                setSosId(res.data?.sos_id);
-                console.log('SOS ID set, location tracking will start automatically');
-              } else {
-                Toast.show({
-                  type: 'error',
-                  text1: 'SOS Creation Failed',
-                  text2: `Failed to create SOS: ${res.error}`,
-                  position: 'bottom',
-                });
-                // Don't revert isSafe here, let user manually mark as safe
-              }
+            const res = await api.sos.createSOS(response.data?.username || "guest", 0, latitude, longitude);
+            console.log('SOS created:', res);
+            if (res.success && res.data?.sos_id) {
+              setSosId(res.data?.sos_id);
+              console.log('SOS ID set, location tracking will start automatically');
             } else {
               Toast.show({
                 type: 'error',
-                text1: 'User Authentication Failed',
-                text2: `Failed to get current user: ${response.error}`,
+                text1: 'SOS Creation Failed',
+                text2: `Failed to create SOS: ${res.error}`,
                 position: 'bottom',
               });
+              // Don't revert isSafe here, let user manually mark as safe
             }
           } else if (isUsingWebSocket && socketRef.current?.connected) {
             // Use WebSocket
@@ -758,10 +855,7 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
     <SafeAreaView style={commonStyles.safeArea}>
       <ScrollView style={styles.container} showsVerticalScrollIndicator={false}>
         <View style={styles.header}>
-          <TouchableOpacity onPress={() => navigation.goBack()}>
-          </TouchableOpacity> 
-          <View style={styles.headerTitleContainer}>
-            <Text style={styles.headerTitle}>Naari कवच</Text>
+          <View style={styles.headerLeftSection}>
             {!isCheckingConnection && (
               <View style={[
                 styles.connectionBadge, 
@@ -772,6 +866,17 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
                 </Text>
               </View>
             )}
+          </View>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Naari कवच</Text>
+          </View>
+          <View style={styles.headerRightSection}>
+            <TouchableOpacity 
+              onPress={() => setShowIPModal(true)}
+              style={styles.settingsButton}
+            >
+              <Ionicons name="settings-outline" size={24} color={colors.darkGray} />
+            </TouchableOpacity>
           </View>
         </View>
 
@@ -900,6 +1005,67 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
           )}
         </View>
       </ScrollView>
+
+      {/* WebSocket IP Configuration Modal */}
+      <Modal
+        visible={showIPModal}
+        transparent={true}
+        animationType="slide"
+        onRequestClose={() => setShowIPModal(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>WebSocket Server Configuration</Text>
+              <TouchableOpacity 
+                onPress={() => setShowIPModal(false)}
+                style={styles.modalCloseButton}
+              >
+                <Ionicons name="close" size={24} color={colors.darkGray} />
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.modalDescription}>
+              Enter the IP address and port of your WebSocket server for emergency communication when internet is unavailable.
+            </Text>
+            
+            <Text style={styles.inputLabel}>Server IP:Port</Text>
+            <TextInput
+              style={styles.ipInput}
+              value={inputWebSocketIP}
+              onChangeText={setInputWebSocketIP}
+              placeholder="192.168.1.100:8002"
+              placeholderTextColor={colors.gray}
+              keyboardType="default"
+              autoCapitalize="none"
+              autoCorrect={false}
+            />
+            
+            <Text style={styles.currentIPText}>
+              Current: {webSocketIP}
+            </Text>
+            
+            <View style={styles.modalButtons}>
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.cancelButton]}
+                onPress={() => {
+                  setInputWebSocketIP(webSocketIP);
+                  setShowIPModal(false);
+                }}
+              >
+                <Text style={styles.cancelButtonText}>Cancel</Text>
+              </TouchableOpacity>
+              
+              <TouchableOpacity 
+                style={[styles.modalButton, styles.updateButton]}
+                onPress={handleUpdateWebSocketIP}
+              >
+                <Text style={styles.updateButtonText}>Update</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -920,7 +1086,17 @@ const styles = StyleSheet.create({
   headerTitleContainer: {
     flex: 1,
     alignItems: 'center',
-    position: 'relative',
+    justifyContent: 'center',
+  },
+  headerLeftSection: {
+    flex: 1,
+    alignItems: 'flex-start',
+    justifyContent: 'center',
+  },
+  headerRightSection: {
+    flex: 1,
+    alignItems: 'flex-end',
+    justifyContent: 'center',
   },
   headerTitle: {
     fontSize: 18,
@@ -929,9 +1105,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
   },
   connectionBadge: {
-    position: 'absolute',
-    top: -8,
-    right: -20,
     paddingHorizontal: 6,
     paddingVertical: 2,
     borderRadius: 8,
@@ -1029,5 +1202,91 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: colors.darkGray,
     flex: 1,
+  },
+  settingsButton: {
+    padding: spacing.sm,
+    borderRadius: borderRadius.small,
+  },
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0, 0, 0, 0.5)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    paddingHorizontal: spacing.lg,
+  },
+  modalContent: {
+    backgroundColor: colors.white,
+    borderRadius: borderRadius.large,
+    padding: spacing.xl,
+    width: '100%',
+    maxWidth: 400,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: spacing.lg,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: colors.darkGray,
+    flex: 1,
+  },
+  modalCloseButton: {
+    padding: spacing.xs,
+  },
+  modalDescription: {
+    fontSize: 14,
+    color: colors.gray,
+    marginBottom: spacing.lg,
+    lineHeight: 20,
+  },
+  inputLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.darkGray,
+    marginBottom: spacing.sm,
+  },
+  ipInput: {
+    borderWidth: 1,
+    borderColor: colors.lightGray,
+    borderRadius: borderRadius.medium,
+    paddingHorizontal: spacing.md,
+    paddingVertical: spacing.sm,
+    fontSize: 16,
+    color: colors.darkGray,
+    marginBottom: spacing.sm,
+  },
+  currentIPText: {
+    fontSize: 12,
+    color: colors.gray,
+    marginBottom: spacing.lg,
+  },
+  modalButtons: {
+    flexDirection: 'row',
+    gap: spacing.md,
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: spacing.md,
+    borderRadius: borderRadius.medium,
+    alignItems: 'center',
+  },
+  cancelButton: {
+    backgroundColor: colors.lightGray,
+  },
+  updateButton: {
+    backgroundColor: colors.black,
+  },
+  cancelButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.darkGray,
+  },
+  updateButtonText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: colors.white,
   },
 });

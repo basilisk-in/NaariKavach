@@ -36,10 +36,21 @@ export default function ProfileScreen({ navigation }: Props): React.JSX.Element 
           onPress: async () => {
             try {
               setLoading(true);
-              await logout();
-              // Navigation is handled automatically by AuthContext
+              
+              // Check if user is authenticated (has token)
+              if (user) {
+                // User is authenticated, perform normal logout
+                await logout();
+              } else {
+                // No auth token, just redirect to splash screen
+                navigation.navigate('Splash');
+              }
+              
+              // Navigation is handled automatically by AuthContext for authenticated users
             } catch (error) {
-              Alert.alert('Error', 'Failed to logout. Please try again.');
+              console.error('Logout error:', error);
+              // If logout fails, still redirect to splash screen
+              navigation.navigate('Splash');
             } finally {
               setLoading(false);
             }

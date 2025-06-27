@@ -173,6 +173,8 @@ export default function AppNavigator(): React.JSX.Element {
             <Stack.Screen name="UserLogin" component={UserLoginScreen} />
             <Stack.Screen name="PoliceLogin" component={PoliceLoginScreen} />
             <Stack.Screen name="SignUp" component={SignUpScreen} />
+            {/* Allow UserTabs access for guest users */}
+            <Stack.Screen name="UserTabs" component={UserTabNavigator} />
           </>
         ) : (
           // Main App Stack - when user is logged in
