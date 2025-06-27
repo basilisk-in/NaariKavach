@@ -250,8 +250,8 @@ export default function PoliceDashboardScreen({ navigation, route }: Props): Rea
         if (socketRef.current?.connected && location?.coords) {
           const unitLocationData = {
             "unit_id": unitId,
-            "latitude": 28.569217,
-            "longitude": 77.166307,
+            "latitude": location.coords.latitude,
+            "longitude": location.coords.longitude,
             "timestamp": new Date().toISOString(),
           };
           

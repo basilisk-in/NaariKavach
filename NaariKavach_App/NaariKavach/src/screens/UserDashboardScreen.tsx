@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, Alert, Linking } from 'react-native';
 import { Ionicons } from '@expo/vector-icons';
 import { BottomTabNavigationProp } from '@react-navigation/bottom-tabs';
@@ -9,6 +9,7 @@ import { commonStyles, colors, spacing, borderRadius } from '../styles/commonSty
 import api, { EmergencyContact, emergencyContactsManager } from '../services/services';
 import * as Location from 'expo-location';
 import Toast from 'react-native-toast-message';
+import io, { Socket } from 'socket.io-client';
 
 type UserDashboardScreenNavigationProp = CompositeNavigationProp<
   BottomTabNavigationProp<UserTabParamList, 'Home'>,
@@ -29,6 +30,15 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
   const [isTrackingLocation, setIsTrackingLocation] = useState(false);
   const [lastLocationUpdate, setLastLocationUpdate] = useState<Date | null>(null);
   const [locationUpdateCount, setLocationUpdateCount] = useState(0);
+
+  // Internet connection and WebSocket state
+  const [hasInternetConnection, setHasInternetConnection] = useState(true);
+  const [isCheckingConnection, setIsCheckingConnection] = useState(true);
+  const [isUsingWebSocket, setIsUsingWebSocket] = useState(false);
+  const socketRef = useRef<Socket | null>(null);
+  
+  // Hardcoded WebSocket server IP - replace with your actual IP
+  const WEBSOCKET_SERVER_URL = 'http://192.168.137.1:8002';
 
   // Get current location on component mount
   useEffect(() => {
@@ -60,6 +70,22 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
 
     return () => clearTimeout(timeoutId);
   }, [isSafe, sosId, isTrackingLocation]);
+
+  // Check internet connection and initialize WebSocket if needed
+  useEffect(() => {
+    checkInternetConnection();
+  }, []);
+
+  // Cleanup WebSocket on unmount
+  useEffect(() => {
+    return () => {
+      if (socketRef.current) {
+        console.log('🧹 Cleaning up WebSocket connection');
+        socketRef.current.disconnect();
+        socketRef.current = null;
+      }
+    };
+  }, []);
 
   const getCurrentLocation = async (): Promise<void> => {
     try {
@@ -99,6 +125,156 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
       );
     } finally {
       setIsLoadingLocation(false);
+    }
+  };
+
+  // Internet connection check function
+  const checkInternetConnection = async (): Promise<void> => {
+    try {
+      setIsCheckingConnection(true);
+      
+      // Try to fetch from a reliable endpoint with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 5000);
+      
+      const response = await fetch('https://www.google.com', {
+        method: 'HEAD',
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        setHasInternetConnection(true);
+        setIsUsingWebSocket(false);
+        console.log('✅ Internet connection available - using normal API');
+        
+        Toast.show({
+          type: 'success',
+          text1: 'Connection Status',
+          text2: 'Internet connection available',
+          position: 'bottom',
+          visibilityTime: 2000,
+        });
+      } else {
+        throw new Error('No internet connection');
+      }
+    } catch (error) {
+      console.log('❌ No internet connection - switching to WebSocket mode');
+      setHasInternetConnection(false);
+      setIsUsingWebSocket(true);
+      
+      Toast.show({
+        type: 'info',
+        text1: 'Offline Mode',
+        text2: 'No internet detected. Using local WebSocket connection.',
+        position: 'bottom',
+        visibilityTime: 3000,
+      });
+      
+      // Initialize WebSocket connection
+      initializeWebSocket();
+    } finally {
+      setIsCheckingConnection(false);
+    }
+  };
+
+  // Initialize WebSocket connection
+  const initializeWebSocket = (): void => {
+    try {
+      console.log('🔌 Initializing WebSocket connection to:', WEBSOCKET_SERVER_URL);
+      
+      const socket = io(WEBSOCKET_SERVER_URL, {
+        transports: ['websocket'],
+        timeout: 10000,
+        reconnection: true,
+        reconnectionAttempts: 5,
+        reconnectionDelay: 2000,
+      });
+
+      socketRef.current = socket;
+
+      socket.on('connect', () => {
+        console.log('✅ WebSocket connected successfully');
+        Toast.show({
+          type: 'success',
+          text1: 'WebSocket Connected',
+          text2: 'Local emergency system ready',
+          position: 'bottom',
+          visibilityTime: 2000,
+        });
+      });
+
+      socket.on('disconnect', () => {
+        console.log('❌ WebSocket disconnected');
+        Toast.show({
+          type: 'error',
+          text1: 'WebSocket Disconnected',
+          text2: 'Connection to local emergency system lost',
+          position: 'bottom',
+        });
+      });
+
+      socket.on('connect_error', (error) => {
+        console.error('🚨 WebSocket connection error:', error);
+        Toast.show({
+          type: 'error',
+          text1: 'WebSocket Error',
+          text2: 'Failed to connect to local emergency system',
+          position: 'bottom',
+        });
+      });
+
+      // Listen for SOS creation response
+      socket.on('create_sos_response', (data) => {
+        console.log('📡 Received create_sos_response:', data);
+        if (data.success && data.data?.sos_id) {
+          setSosId(data.data.sos_id);
+          console.log('✅ SOS created via WebSocket with ID:', data.data.sos_id);
+          Toast.show({
+            type: 'success',
+            text1: 'Emergency Alert Created',
+            text2: `SOS ID: ${data.data.sos_id}`,
+            position: 'bottom',
+          });
+        } else {
+          console.error('❌ Failed to create SOS via WebSocket:', data.error);
+          Toast.show({
+            type: 'error',
+            text1: 'SOS Creation Failed',
+            text2: data.error || 'Unknown error',
+            position: 'bottom',
+          });
+        }
+      });
+
+      // Listen for location update response
+      socket.on('update_location_response', (data) => {
+        console.log('📍 Received update_location_response:', data);
+        if (data.success) {
+          const updateTime = new Date();
+          setLastLocationUpdate(updateTime);
+          setLocationUpdateCount(prev => prev + 1);
+          console.log('✅ Location updated via WebSocket');
+        } else {
+          console.error('❌ Failed to update location via WebSocket:', data.error);
+          Toast.show({
+            type: 'error',
+            text1: 'Location Update Failed',
+            text2: data.error || 'Unknown error',
+            position: 'bottom',
+          });
+        }
+      });
+
+    } catch (error) {
+      console.error('🚨 Error initializing WebSocket:', error);
+      Toast.show({
+        type: 'error',
+        text1: 'WebSocket Initialization Failed',
+        text2: 'Could not set up local emergency connection',
+        position: 'bottom',
+      });
     }
   };
 
@@ -184,24 +360,49 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
       const { latitude, longitude } = currentLocation.coords;
       const timestamp = new Date().toISOString();
 
-      // Make API call with timeout
-      const apiPromise = api.sos.updateLocation(sosId, latitude, longitude);
-      const apiTimeoutPromise = new Promise<never>((_, reject) => 
-        setTimeout(() => reject(new Error('API request timeout')), 8000)
-      );
+      // Choose between API or WebSocket based on connection status
+      if (hasInternetConnection && !isUsingWebSocket) {
+        // Use normal API call
+        const apiPromise = api.sos.updateLocation(sosId, latitude, longitude);
+        const apiTimeoutPromise = new Promise<never>((_, reject) => 
+          setTimeout(() => reject(new Error('API request timeout')), 8000)
+        );
 
-      const response = await Promise.race([apiPromise, apiTimeoutPromise]);
-      
-      if (response.success) {
-        const updateTime = new Date();
-        setLastLocationUpdate(updateTime);
-        setLocationUpdateCount(prev => prev + 1);
+        const response = await Promise.race([apiPromise, apiTimeoutPromise]);
+        
+        if (response.success) {
+          console.log('✅ Location updated via API:', response.data);
+          const updateTime = new Date();
+          setLastLocationUpdate(updateTime);
+          setLocationUpdateCount(prev => prev + 1);
+          return true;
+        } else {
+          Toast.show({
+            type: 'error',
+            text1: 'API Error',
+            text2: `Location update failed: ${response.error}`,
+            position: 'bottom',
+          });
+          return false;
+        }
+      } else if (isUsingWebSocket && socketRef.current?.connected) {
+        // Use WebSocket
+        console.log('📡 Sending location update via WebSocket');
+        socketRef.current.emit('update_location', {
+          "sos_request": sosId,
+          "latitude": latitude,
+          "longitude": longitude
+        });
+        
+        // Note: Response will be handled by the 'update_location_response' listener
+        // Return true for now since the response is async
         return true;
       } else {
+        // No connection available
         Toast.show({
           type: 'error',
-          text1: 'API Error',
-          text2: `Location update failed: ${response.error}`,
+          text1: 'No Connection',
+          text2: 'Cannot update location - no internet or WebSocket connection',
           position: 'bottom',
         });
         return false;
@@ -256,27 +457,55 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
       // Create SOS in background (non-blocking for UI responsiveness)
       const createSOSAndStartTracking = async () => {
         try {
-          const response = await api.auth.getCurrentUser();
-          if (response.success && response.data?.username) {
-            const res = await api.sos.createSOS(response.data?.username, 0, latitude, longitude);
-            console.log('SOS created:', res);
-            if (res.success && res.data?.sos_id) {
-              setSosId(res.data?.sos_id);
-              console.log('SOS ID set, location tracking will start automatically');
+          console.log("isUsingWebSocket:", isUsingWebSocket, socketRef.current?.connected);
+          if (hasInternetConnection && !isUsingWebSocket) {
+            // Use normal API call
+            const response = await api.auth.getCurrentUser();
+            if (response.success && response.data?.username) {
+              const res = await api.sos.createSOS(response.data?.username, 0, latitude, longitude);
+              console.log('SOS created:', res);
+              if (res.success && res.data?.sos_id) {
+                setSosId(res.data?.sos_id);
+                console.log('SOS ID set, location tracking will start automatically');
+              } else {
+                Toast.show({
+                  type: 'error',
+                  text1: 'SOS Creation Failed',
+                  text2: `Failed to create SOS: ${res.error}`,
+                  position: 'bottom',
+                });
+                // Don't revert isSafe here, let user manually mark as safe
+              }
             } else {
               Toast.show({
                 type: 'error',
-                text1: 'SOS Creation Failed',
-                text2: `Failed to create SOS: ${res.error}`,
+                text1: 'User Authentication Failed',
+                text2: `Failed to get current user: ${response.error}`,
                 position: 'bottom',
               });
-              // Don't revert isSafe here, let user manually mark as safe
             }
+          } else if (isUsingWebSocket && socketRef.current?.connected) {
+            // Use WebSocket
+            console.log('📡 Creating SOS via WebSocket');
+            
+            // For WebSocket, we'll use a default name since we can't get user info
+            const sosData = {
+              "name": `Emergency-${Date.now()}`, // Generate unique name
+              "sos_type": 0,
+              "initial_latitude": latitude,
+              "initial_longitude": longitude
+            };
+            
+            socketRef.current.emit('create_sos', sosData);
+            console.log('📡 SOS creation request sent via WebSocket');
+            
+            // Response will be handled by the 'create_sos_response' listener
           } else {
+            // No connection available
             Toast.show({
               type: 'error',
-              text1: 'User Authentication Failed',
-              text2: `Failed to get current user: ${response.error}`,
+              text1: 'No Connection',
+              text2: 'Cannot create emergency alert - no internet or WebSocket connection',
               position: 'bottom',
             });
           }
@@ -530,7 +759,19 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
         <View style={styles.header}>
           <TouchableOpacity onPress={() => navigation.goBack()}>
           </TouchableOpacity> 
-          <Text style={styles.headerTitle}>Naari कवच</Text>
+          <View style={styles.headerTitleContainer}>
+            <Text style={styles.headerTitle}>Naari कवच</Text>
+            {!isCheckingConnection && (
+              <View style={[
+                styles.connectionBadge, 
+                { backgroundColor: hasInternetConnection ? '#4CAF50' : isUsingWebSocket ? '#FF9800' : socketRef.current?.connected ? '#F44336' : "#4CAF50"}
+              ]}>
+                <Text style={styles.connectionBadgeText}>
+                  {hasInternetConnection ? 'Online' : isUsingWebSocket ? 'WebSocket' : 'Offline'}
+                </Text>
+              </View>
+            )}
+          </View>
         </View>
 
         <View style={styles.content}>
@@ -638,6 +879,26 @@ export default function UserDashboardScreen({ navigation }: Props): React.JSX.El
             </View>
             <Text style={styles.statusText}>Send Emergency Alert to Contacts</Text>
           </TouchableOpacity>
+
+          {/* Connection retry option - only show when there's an issue */}
+          {(!hasInternetConnection && !isUsingWebSocket) && (
+            <TouchableOpacity 
+              style={styles.statusCard}
+              onPress={checkInternetConnection}
+              disabled={isCheckingConnection}
+            >
+              <View style={styles.statusIcon}>
+                <Ionicons 
+                  name={isCheckingConnection ? "refresh" : "wifi-outline"} 
+                  size={24} 
+                  color={isCheckingConnection ? "#FF9800" : "#2196F3"} 
+                />
+              </View>
+              <Text style={styles.statusText}>
+                {isCheckingConnection ? 'Checking connection...' : 'Retry Connection'}
+              </Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -657,11 +918,30 @@ const styles = StyleSheet.create({
     paddingVertical: spacing.lg,
     marginTop: spacing.lg,
   },
+  headerTitleContainer: {
+    flex: 1,
+    alignItems: 'center',
+    position: 'relative',
+  },
   headerTitle: {
     fontSize: 18,
     fontWeight: '700',
     color: colors.darkGray,
-    flex: 1,
+    textAlign: 'center',
+  },
+  connectionBadge: {
+    position: 'absolute',
+    top: -8,
+    right: -20,
+    paddingHorizontal: 6,
+    paddingVertical: 2,
+    borderRadius: 8,
+    minWidth: 60,
+  },
+  connectionBadgeText: {
+    fontSize: 10,
+    fontWeight: '600',
+    color: colors.white,
     textAlign: 'center',
   },
   content: {
