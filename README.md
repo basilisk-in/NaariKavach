@@ -181,11 +181,9 @@ Refer to documentation:
 
 ## 📎 Resources / Credits
 
-- **Groq AI** – Ultra-fast real-time AI engine powering Padma, our nutrition coach  
-- **Monad Blockchain** – Secure and fast blockchain for streak tracking  
-- **Stellar Network** – Fast, low-cost blockchain for token rewards  
-- **Indian Food Composition Tables (IFCT) and other Open Source Resources** – Dataset for Indian nutritional data  
-- **Open Source Libraries** – Flutter packages, Django Rest Framework  
+- **Violence Detection** – https://huggingface.co/jaranohaal/vit-base-violence-detection
+- **Gender Classification** - https://huggingface.co/rizvandwiki/gender-classification-2
+
 
 ---
 
