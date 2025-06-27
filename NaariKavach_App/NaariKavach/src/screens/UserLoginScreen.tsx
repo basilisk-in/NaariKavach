@@ -33,8 +33,12 @@ export default function UserLoginScreen({ navigation }: Props): React.JSX.Elemen
 
     try {
       setIsLoading(true);
-      await login(email, password);
-      Alert.alert('Success', 'Login successful');
+      const res = await login(email, password);
+      if (res) {
+        // Navigation is handled automatically by AuthContext state change
+        // The AppNavigator will redirect to UserTabs when isAuthenticated becomes true
+        console.log("IS AUTHENTICATED", isAuthenticated);
+      } 
       // navigation.navigate("UserTabs");
     } catch (error) {
       Alert.alert('Error', error instanceof Error ? error.message : 'Login failed');

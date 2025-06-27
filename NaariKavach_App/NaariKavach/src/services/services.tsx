@@ -7,6 +7,8 @@ const AUTH_TOKEN_KEY = 'auth_token';
 const USER_DATA_KEY = 'user_data';
 const EMERGENCY_CONTACTS_KEY = 'emergency_contacts';
 
+
+
 // Types for API responses and requests
 export interface ApiResponse<T> {
   success: boolean;
